@@ -20,7 +20,7 @@ services:
       - key: UPLOAD_DIR
         value: /var/data/uploads
       - key: CORS_ORIGIN
-        value: https://proactif-field-web.onrender.com
+        value: https://proactif-field-web.onrender.com,https://field.proactifsystem.com
 
   - type: web
     name: proactif-field-web
