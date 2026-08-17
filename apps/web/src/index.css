@@ -366,7 +366,28 @@ select {
   width: 100%;
   border: 1px solid var(--surface-2);
   border-radius: 8px;
-  background: white;
+  background: #525659;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+
+.report-preview-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.report-preview-page {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .sheet-header {

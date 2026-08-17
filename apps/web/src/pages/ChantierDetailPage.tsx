@@ -9,9 +9,10 @@ import {
   usePoints,
   useUploadPlan,
 } from "../api/hooks";
-import { apiFetchBlob } from "../api/client";
+import { apiFetchArrayBuffer } from "../api/client";
 import PlanViewer from "../components/PlanViewer";
 import PointFiche from "../components/PointFiche";
+import ReportPreview from "../components/ReportPreview";
 
 export default function ChantierDetailPage() {
   const { chantierId } = useParams<{ chantierId: string }>();
@@ -24,7 +25,7 @@ export default function ChantierDetailPage() {
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<PointDTO | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
-  const [reportPreviewUrl, setReportPreviewUrl] = useState<string | null>(null);
+  const [reportBuffer, setReportBuffer] = useState<ArrayBuffer | null>(null);
 
   useEffect(() => {
     if (plans && plans.length > 0 && !activePlanId) {
@@ -66,24 +67,22 @@ export default function ChantierDetailPage() {
     setReportBusy(true);
     try {
       const report = await generateReport.mutateAsync();
-      const blob = await apiFetchBlob(`/api/files/reports/${report.id}`);
-      setReportPreviewUrl(URL.createObjectURL(blob));
+      const buffer = await apiFetchArrayBuffer(`/api/files/reports/${report.id}`);
+      setReportBuffer(buffer);
     } finally {
       setReportBusy(false);
     }
   }
 
-  function closeReportPreview() {
-    if (reportPreviewUrl) URL.revokeObjectURL(reportPreviewUrl);
-    setReportPreviewUrl(null);
-  }
-
   function downloadReport() {
-    if (!reportPreviewUrl) return;
+    if (!reportBuffer) return;
+    const blob = new Blob([reportBuffer], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = reportPreviewUrl;
+    a.href = url;
     a.download = `rapport-${chantier?.name ?? "chantier"}.pdf`;
     a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -154,21 +153,8 @@ export default function ChantierDetailPage() {
         <PointFiche planId={activePlan.id} point={selectedPoint} onClose={() => setSelectedPoint(null)} />
       )}
 
-      {reportPreviewUrl && (
-        <div className="sheet-overlay" onClick={closeReportPreview}>
-          <div className="sheet report-preview-sheet" onClick={(e) => e.stopPropagation()}>
-            <div className="sheet-header">
-              <h2 style={{ margin: 0 }}>Aperçu du rapport</h2>
-              <button className="btn secondary" onClick={closeReportPreview}>
-                Fermer
-              </button>
-            </div>
-            <iframe title="Aperçu du rapport PDF" src={reportPreviewUrl} className="report-preview-frame" />
-            <button className="btn block" onClick={downloadReport} style={{ marginTop: 12 }}>
-              ⬇️ Télécharger le PDF
-            </button>
-          </div>
-        </div>
+      {reportBuffer && (
+        <ReportPreview arrayBuffer={reportBuffer} onClose={() => setReportBuffer(null)} onDownload={downloadReport} />
       )}
     </>
   );
