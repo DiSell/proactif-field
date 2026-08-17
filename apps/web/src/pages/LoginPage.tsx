@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (token) return <Navigate to="/" replace />;
 
@@ -56,13 +57,24 @@ export default function LoginPage() {
         </div>
         <div className="field">
           <label>Mot de passe</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={8}
-            required
-          />
+          <div className="password-input">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              minLength={8}
+              required
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+              aria-pressed={showPassword}
+            >
+              {showPassword ? "🙈" : "👁️"}
+            </button>
+          </div>
         </div>
         <button className="btn block" type="submit" disabled={loading}>
           {mode === "login" ? "Se connecter" : "Créer le compte"}

@@ -117,6 +117,34 @@ select {
   color: var(--text);
 }
 
+.password-input {
+  position: relative;
+}
+
+.password-input input {
+  width: 100%;
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .card {
   background: var(--surface);
   border-radius: 12px;
