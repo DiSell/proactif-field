@@ -1,19 +1,65 @@
 import PDFDocument from "pdfkit";
 import fs from "fs";
 import crypto from "crypto";
+import path from "path";
+import { Photo } from "@prisma/client";
 import { prisma } from "../../config/db";
 import { HttpError } from "../../middleware/errorHandler";
 import { ensureUploadSubdir, absolutePathFor } from "../../utils/storage";
-import path from "path";
 
 function formatDate(date: Date): string {
   return date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 }
 
-function formatGps(lat: number | null, lng: number | null, accuracy: number | null): string {
-  if (lat === null || lng === null) return "GPS indisponible";
-  const precision = accuracy !== null ? ` (précision ~${Math.round(accuracy)} m)` : "";
-  return `${lat.toFixed(6)}, ${lng.toFixed(6)}${precision}`;
+const THUMB = 150;
+const GAP = 12;
+const PER_ROW = 3;
+const CAPTION_H = 22;
+const CELL_H = THUMB + CAPTION_H + GAP;
+
+function drawPhotoGrid(doc: PDFKit.PDFDocument, photos: Photo[]): void {
+  if (photos.length === 0) {
+    doc.fontSize(9).fillColor("gray").text("Aucune photo pour ce point.");
+    doc.fillColor("black");
+    return;
+  }
+
+  const left = doc.page.margins.left;
+  let rowTop = doc.y;
+
+  photos.forEach((photo, index) => {
+    const col = index % PER_ROW;
+    if (col === 0 && index !== 0) {
+      rowTop += CELL_H;
+    }
+    if (rowTop + CELL_H > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+      rowTop = doc.page.margins.top;
+    }
+
+    const x = left + col * (THUMB + GAP);
+    const absPhotoPath = absolutePathFor(photo.filePath);
+    if (fs.existsSync(absPhotoPath)) {
+      try {
+        doc.image(absPhotoPath, x, rowTop, { fit: [THUMB, THUMB] });
+      } catch {
+        doc.rect(x, rowTop, THUMB, THUMB).stroke("#cccccc");
+        doc
+          .fontSize(8)
+          .fillColor("red")
+          .text("Image illisible", x, rowTop + THUMB / 2 - 5, { width: THUMB, align: "center" });
+        doc.fillColor("black");
+      }
+    }
+    doc
+      .fontSize(8)
+      .fillColor("gray")
+      .text(formatDate(photo.takenAt), x, rowTop + THUMB + 4, { width: THUMB, align: "center" });
+    doc.fillColor("black");
+  });
+
+  doc.x = left;
+  doc.y = rowTop + CELL_H + 8;
 }
 
 export async function generateChantierReport(chantierId: string, generatedById: string) {
@@ -59,31 +105,26 @@ export async function generateChantierReport(chantierId: string, generatedById: 
     }
 
     for (const point of plan.points) {
-      doc.moveDown();
+      if (doc.y > doc.page.height - doc.page.margins.bottom - 120) {
+        doc.addPage();
+      } else {
+        doc.moveDown();
+      }
+
       doc
         .fontSize(13)
         .text(`${point.type ? `[${point.type}] ` : ""}${point.identifiant}${point.nom ? ` — ${point.nom}` : ""}`);
-      doc.fontSize(10).fillColor("gray").text(`Statut : ${point.statut}`);
-      if (point.commentaire) doc.fontSize(10).fillColor("black").text(`Commentaire : ${point.commentaire}`);
-      doc.fillColor("black");
-
-      for (const photo of point.photos) {
-        doc.moveDown(0.5);
-        const absPhotoPath = absolutePathFor(photo.filePath);
-        if (fs.existsSync(absPhotoPath)) {
-          try {
-            doc.image(absPhotoPath, { width: 200 });
-          } catch {
-            doc.fontSize(9).fillColor("red").text("(impossible d'afficher cette photo)");
-            doc.fillColor("black");
-          }
-        }
-        doc
-          .fontSize(9)
-          .fillColor("gray")
-          .text(`Prise le ${formatDate(photo.takenAt)} — ${formatGps(photo.gpsLat, photo.gpsLng, photo.gpsAccuracy)}`);
-        doc.fillColor("black");
+      doc
+        .fontSize(9)
+        .fillColor("gray")
+        .text(`Statut : ${point.statut}    ·    Ajouté le ${formatDate(point.createdAt)}`);
+      if (point.commentaire) {
+        doc.fontSize(10).fillColor("black").text(`Commentaire : ${point.commentaire}`);
       }
+      doc.fillColor("black");
+      doc.moveDown(0.5);
+
+      drawPhotoGrid(doc, point.photos);
     }
   }
 

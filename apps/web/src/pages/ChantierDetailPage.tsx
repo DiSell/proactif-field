@@ -24,6 +24,7 @@ export default function ChantierDetailPage() {
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<PointDTO | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
+  const [reportPreviewUrl, setReportPreviewUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (plans && plans.length > 0 && !activePlanId) {
@@ -66,15 +67,23 @@ export default function ChantierDetailPage() {
     try {
       const report = await generateReport.mutateAsync();
       const blob = await apiFetchBlob(`/api/files/reports/${report.id}`);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `rapport-${chantier?.name ?? "chantier"}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      setReportPreviewUrl(URL.createObjectURL(blob));
     } finally {
       setReportBusy(false);
     }
+  }
+
+  function closeReportPreview() {
+    if (reportPreviewUrl) URL.revokeObjectURL(reportPreviewUrl);
+    setReportPreviewUrl(null);
+  }
+
+  function downloadReport() {
+    if (!reportPreviewUrl) return;
+    const a = document.createElement("a");
+    a.href = reportPreviewUrl;
+    a.download = `rapport-${chantier?.name ?? "chantier"}.pdf`;
+    a.click();
   }
 
   return (
@@ -143,6 +152,23 @@ export default function ChantierDetailPage() {
 
       {selectedPoint && activePlan && (
         <PointFiche planId={activePlan.id} point={selectedPoint} onClose={() => setSelectedPoint(null)} />
+      )}
+
+      {reportPreviewUrl && (
+        <div className="sheet-overlay" onClick={closeReportPreview}>
+          <div className="sheet report-preview-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-header">
+              <h2 style={{ margin: 0 }}>Aperçu du rapport</h2>
+              <button className="btn secondary" onClick={closeReportPreview}>
+                Fermer
+              </button>
+            </div>
+            <iframe title="Aperçu du rapport PDF" src={reportPreviewUrl} className="report-preview-frame" />
+            <button className="btn block" onClick={downloadReport} style={{ marginTop: 12 }}>
+              ⬇️ Télécharger le PDF
+            </button>
+          </div>
+        </div>
       )}
     </>
   );

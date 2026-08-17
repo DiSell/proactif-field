@@ -304,6 +304,21 @@ select {
   padding: 16px;
 }
 
+.report-preview-sheet {
+  max-height: 94vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.report-preview-frame {
+  flex: 1;
+  min-height: 60vh;
+  width: 100%;
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  background: white;
+}
+
 .sheet-header {
   display: flex;
   justify-content: space-between;
