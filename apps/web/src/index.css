@@ -311,6 +311,31 @@ select {
   margin-bottom: 12px;
 }
 
+.photo-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--surface-2);
+}
+
+.photo-section-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.photo-section-empty {
+  margin: 0 0 14px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.photo-capture-btn {
+  margin-top: 12px;
+  padding: 14px 16px;
+  font-size: 16px;
+}
+
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

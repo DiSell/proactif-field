@@ -5,7 +5,7 @@ export interface GpsPosition {
 }
 
 export function getCurrentPositionSafe(timeoutMs = 8000): Promise<GpsPosition | null> {
-  return new Promise((resolve) => {
+  const geoPromise = new Promise<GpsPosition | null>((resolve) => {
     if (!("geolocation" in navigator)) {
       resolve(null);
       return;
@@ -21,4 +21,14 @@ export function getCurrentPositionSafe(timeoutMs = 8000): Promise<GpsPosition | 
       { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 }
     );
   });
+
+  // Belt-and-suspenders: some mobile browsers don't reliably honor the
+  // PositionOptions timeout (e.g. when the tab is backgrounded), which left
+  // photo capture stuck forever waiting on GPS. This guarantees we always
+  // move on.
+  const safetyTimeout = new Promise<GpsPosition | null>((resolve) => {
+    setTimeout(() => resolve(null), timeoutMs + 1500);
+  });
+
+  return Promise.race([geoPromise, safetyTimeout]);
 }

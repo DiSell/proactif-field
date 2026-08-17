@@ -151,40 +151,47 @@ export default function PointFiche({ planId, point, onClose }: Props) {
           </div>
         </div>
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          style={{ display: "none" }}
-          onChange={handleFileSelected}
-        />
-        <button
-          className="btn block"
-          disabled={capturing}
-          onClick={() => fileInputRef.current?.click()}
-          style={{ marginTop: 8 }}
-        >
-          {capturing ? "Enregistrement…" : "📷 Prendre une photo"}
-        </button>
+        <div className="photo-section">
+          <h3 className="photo-section-title">Photos du point ({(photos?.length ?? 0) + pending.length})</h3>
 
-        <div className="photo-grid">
-          {photos?.map((photo) => (
-            <PhotoThumb
-              key={photo.id}
-              photoId={photo.id}
-              takenAt={photo.takenAt}
-              onOpen={(url) => setLightbox({ url, caption: formatDateTime(photo.takenAt) })}
-            />
-          ))}
-          {pending.map((p) => (
-            <PendingThumb
-              key={p.id}
-              photo={p}
-              onCancel={() => cancelPending(p.id)}
-              onOpen={(url) => setLightbox({ url, caption: formatDateTime(p.takenAt) })}
-            />
-          ))}
+          {(photos?.length ?? 0) + pending.length === 0 ? (
+            <p className="photo-section-empty">Aucune photo pour l'instant.</p>
+          ) : (
+            <div className="photo-grid">
+              {photos?.map((photo) => (
+                <PhotoThumb
+                  key={photo.id}
+                  photoId={photo.id}
+                  takenAt={photo.takenAt}
+                  onOpen={(url) => setLightbox({ url, caption: formatDateTime(photo.takenAt) })}
+                />
+              ))}
+              {pending.map((p) => (
+                <PendingThumb
+                  key={p.id}
+                  photo={p}
+                  onCancel={() => cancelPending(p.id)}
+                  onOpen={(url) => setLightbox({ url, caption: formatDateTime(p.takenAt) })}
+                />
+              ))}
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            style={{ display: "none" }}
+            onChange={handleFileSelected}
+          />
+          <button
+            className="btn block photo-capture-btn"
+            disabled={capturing}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {capturing ? "Enregistrement…" : "📷 Prendre une photo"}
+          </button>
         </div>
 
         <button className="btn danger block" onClick={handleDeletePoint} style={{ marginTop: 16 }}>
