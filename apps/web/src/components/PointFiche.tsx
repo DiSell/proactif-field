@@ -17,9 +17,9 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 }
 
-function formatGps(lat: number | null, lng: number | null, accuracy: number | null): string {
-  if (lat === null || lng === null) return "GPS indisponible";
-  return `${lat.toFixed(5)}, ${lng.toFixed(5)}${accuracy ? ` (±${Math.round(accuracy)} m)` : ""}`;
+interface LightboxState {
+  url: string;
+  caption: string;
 }
 
 export default function PointFiche({ planId, point, onClose }: Props) {
@@ -28,6 +28,7 @@ export default function PointFiche({ planId, point, onClose }: Props) {
   const { data: photos } = usePhotos(point.id);
   const [pending, setPending] = useState<PendingPhoto[]>([]);
   const [capturing, setCapturing] = useState(false);
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [identifiant, setIdentifiant] = useState(point.identifiant);
@@ -169,10 +170,20 @@ export default function PointFiche({ planId, point, onClose }: Props) {
 
         <div className="photo-grid">
           {photos?.map((photo) => (
-            <PhotoThumb key={photo.id} photoId={photo.id} takenAt={photo.takenAt} gpsLat={photo.gpsLat} gpsLng={photo.gpsLng} gpsAccuracy={photo.gpsAccuracy} />
+            <PhotoThumb
+              key={photo.id}
+              photoId={photo.id}
+              takenAt={photo.takenAt}
+              onOpen={(url) => setLightbox({ url, caption: formatDateTime(photo.takenAt) })}
+            />
           ))}
           {pending.map((p) => (
-            <PendingThumb key={p.id} photo={p} onCancel={() => cancelPending(p.id)} />
+            <PendingThumb
+              key={p.id}
+              photo={p}
+              onCancel={() => cancelPending(p.id)}
+              onOpen={(url) => setLightbox({ url, caption: formatDateTime(p.takenAt) })}
+            />
           ))}
         </div>
 
@@ -180,6 +191,20 @@ export default function PointFiche({ planId, point, onClose }: Props) {
           Supprimer ce point
         </button>
       </div>
+
+      {lightbox && <PhotoLightbox state={lightbox} onClose={() => setLightbox(null)} />}
+    </div>
+  );
+}
+
+function PhotoLightbox({ state, onClose }: { state: LightboxState; onClose: () => void }) {
+  return (
+    <div className="lightbox-overlay" onClick={onClose}>
+      <button className="lightbox-close" onClick={onClose} aria-label="Fermer">
+        ✕
+      </button>
+      <img src={state.url} alt="" onClick={(e) => e.stopPropagation()} />
+      <div className="lightbox-caption">{state.caption}</div>
     </div>
   );
 }
@@ -187,15 +212,11 @@ export default function PointFiche({ planId, point, onClose }: Props) {
 function PhotoThumb({
   photoId,
   takenAt,
-  gpsLat,
-  gpsLng,
-  gpsAccuracy,
+  onOpen,
 }: {
   photoId: string;
   takenAt: string;
-  gpsLat: number | null;
-  gpsLng: number | null;
-  gpsAccuracy: number | null;
+  onOpen: (url: string) => void;
 }) {
   const { url, error, retry } = useFileObjectUrl("photos", photoId);
   return (
@@ -216,17 +237,24 @@ function PhotoThumb({
           Échec — réessayer
         </button>
       ) : url ? (
-        <img src={url} alt="" />
+        <img src={url} alt="" onClick={() => onOpen(url)} style={{ cursor: "pointer" }} />
       ) : (
         <div style={{ aspectRatio: 1, background: "#334155", borderRadius: 8 }} />
       )}
       <div className="photo-meta">{formatDateTime(takenAt)}</div>
-      <div className="photo-meta">{formatGps(gpsLat, gpsLng, gpsAccuracy)}</div>
     </div>
   );
 }
 
-function PendingThumb({ photo, onCancel }: { photo: PendingPhoto; onCancel: () => void }) {
+function PendingThumb({
+  photo,
+  onCancel,
+  onOpen,
+}: {
+  photo: PendingPhoto;
+  onCancel: () => void;
+  onOpen: (url: string) => void;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     const objectUrl = URL.createObjectURL(photo.blob);
@@ -237,7 +265,7 @@ function PendingThumb({ photo, onCancel }: { photo: PendingPhoto; onCancel: () =
   return (
     <div>
       <div style={{ position: "relative" }}>
-        {url && <img src={url} alt="" />}
+        {url && <img src={url} alt="" onClick={() => onOpen(url)} style={{ cursor: "pointer" }} />}
         <div
           style={{
             position: "absolute",
@@ -274,7 +302,6 @@ function PendingThumb({ photo, onCancel }: { photo: PendingPhoto; onCancel: () =
         </button>
       </div>
       <div className="photo-meta">{formatDateTime(photo.takenAt)}</div>
-      <div className="photo-meta">{formatGps(photo.gpsLat, photo.gpsLng, photo.gpsAccuracy)}</div>
     </div>
   );
 }
