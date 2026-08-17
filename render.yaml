@@ -1,0 +1,35 @@
+services:
+  - type: web
+    name: proactif-field-api
+    runtime: node
+    plan: starter
+    region: ohio
+    buildCommand: npm install && npm run build:shared && npm --workspace=apps/api run prisma:generate && npm --workspace=apps/api run build && npm --workspace=apps/api run prisma:migrate:deploy
+    startCommand: npm --workspace=apps/api run start
+    disk:
+      name: proactif-field-uploads
+      mountPath: /var/data/uploads
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: UPLOAD_DIR
+        value: /var/data/uploads
+      - key: CORS_ORIGIN
+        value: https://proactif-field-web.onrender.com
+
+  - type: web
+    name: proactif-field-web
+    runtime: static
+    buildCommand: npm install && npm run build:shared && npm --workspace=apps/web run build
+    staticPublishPath: apps/web/dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://proactif-field-api.onrender.com
+    routes:
+      - src: /*
+        dest: /index.html
