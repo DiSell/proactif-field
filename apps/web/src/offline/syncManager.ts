@@ -27,8 +27,9 @@ export async function trySync(): Promise<void> {
     const pending = await getPendingPhotos();
     for (const photo of pending) {
       try {
+        const blob = new Blob([photo.arrayBuffer], { type: photo.mimeType });
         const form = new FormData();
-        form.append("file", photo.blob, photo.fileName);
+        form.append("file", blob, photo.fileName);
         form.append("takenAt", photo.takenAt);
         if (photo.gpsLat !== null) form.append("gpsLat", String(photo.gpsLat));
         if (photo.gpsLng !== null) form.append("gpsLng", String(photo.gpsLng));

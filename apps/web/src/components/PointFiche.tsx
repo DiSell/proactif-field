@@ -66,6 +66,7 @@ export default function PointFiche({ planId, point, onClose }: Props) {
     const pendingId = crypto.randomUUID();
     try {
       const takenAt = new Date().toISOString();
+      const arrayBuffer = await file.arrayBuffer();
 
       // Save immediately without waiting on GPS, so the button frees up right
       // away and the next photo can be taken without delay — GPS is attached
@@ -74,7 +75,8 @@ export default function PointFiche({ planId, point, onClose }: Props) {
         id: pendingId,
         planId,
         pointId: point.id,
-        blob: file,
+        arrayBuffer,
+        mimeType: file.type || "image/jpeg",
         fileName: file.name || `photo-${Date.now()}.jpg`,
         takenAt,
         gpsLat: null,
@@ -287,10 +289,11 @@ function PendingThumb({
 }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
-    const objectUrl = URL.createObjectURL(photo.blob);
+    const blob = new Blob([photo.arrayBuffer], { type: photo.mimeType });
+    const objectUrl = URL.createObjectURL(blob);
     setUrl(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
-  }, [photo.blob]);
+  }, [photo.arrayBuffer, photo.mimeType]);
 
   return (
     <div>

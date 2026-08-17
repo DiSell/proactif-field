@@ -4,7 +4,13 @@ export interface PendingPhoto {
   id: string;
   planId: string;
   pointId: string;
-  blob: Blob;
+  // Stored as a raw ArrayBuffer rather than a Blob/File: Safari has a
+  // long-standing IndexedDB bug where Blobs can come back corrupted/
+  // truncated on read (especially after the tab was backgrounded), which
+  // was silently sending broken multipart uploads to the server
+  // ("Unexpected end of form"). Plain ArrayBuffers don't hit that bug.
+  arrayBuffer: ArrayBuffer;
+  mimeType: string;
   fileName: string;
   takenAt: string;
   gpsLat: number | null;
