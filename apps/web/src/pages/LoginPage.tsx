@@ -35,6 +35,7 @@ export default function LoginPage() {
 
   return (
     <div className="center-screen">
+      <img src="/logo-icon.svg" alt="" width={72} height={72} />
       <h1>Proactif Field</h1>
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 360 }}>
         {error && <div className="error-banner">{error}</div>}

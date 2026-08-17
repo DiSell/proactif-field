@@ -25,7 +25,10 @@ export default function ChantiersListPage() {
   return (
     <>
       <div className="topbar">
-        <h1>Chantiers</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <img src="/logo-icon.svg" alt="" width={28} height={28} />
+          <h1>Chantiers</h1>
+        </div>
         <button className="btn secondary" onClick={() => clearAuth()}>
           {user?.name ?? "Déconnexion"}
         </button>
