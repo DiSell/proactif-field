@@ -11,6 +11,7 @@ import {
 } from "../offline/db";
 import { onSyncChange, trySync } from "../offline/syncManager";
 import { getCurrentPositionSafe } from "../utils/geolocation";
+import AutocompleteInput from "./AutocompleteInput";
 import StatusBadge from "./StatusBadge";
 
 interface Props {
@@ -117,32 +118,41 @@ export default function PointFiche({ planId, point, onClose }: Props) {
 
         <div className="field">
           <label>Identifiant</label>
-          <input
+          <AutocompleteInput
+            field="point.identifiant"
             value={identifiant}
-            onChange={(e) => setIdentifiant(e.target.value)}
-            onBlur={() => saveField({ identifiant })}
+            onChange={setIdentifiant}
+            onCommit={(v) => saveField({ identifiant: v })}
           />
         </div>
         <div className="field">
           <label>Type (regard, chambre, vanne, poteau…)</label>
-          <input
+          <AutocompleteInput
+            field="point.type"
             value={type}
-            onChange={(e) => setType(e.target.value)}
-            onBlur={() => saveField({ type })}
+            onChange={setType}
+            onCommit={(v) => saveField({ type: v })}
             placeholder="ex: regard"
           />
         </div>
         <div className="field">
           <label>Nom (optionnel)</label>
-          <input value={nom} onChange={(e) => setNom(e.target.value)} onBlur={() => saveField({ nom })} />
+          <AutocompleteInput
+            field="point.nom"
+            value={nom}
+            onChange={setNom}
+            onCommit={(v) => saveField({ nom: v })}
+          />
         </div>
         <div className="field">
           <label>Commentaire</label>
-          <textarea
-            rows={3}
+          <AutocompleteInput
+            field="point.commentaire"
             value={commentaire}
-            onChange={(e) => setCommentaire(e.target.value)}
-            onBlur={() => saveField({ commentaire })}
+            onChange={setCommentaire}
+            onCommit={(v) => saveField({ commentaire: v })}
+            multiline
+            rows={3}
           />
         </div>
         <div className="field">

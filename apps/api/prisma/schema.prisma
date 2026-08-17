@@ -85,6 +85,24 @@ model Photo {
   createdAt   DateTime @default(now())
 }
 
+// Generic, business-agnostic autocomplete library: every text field in the
+// app (point type, comment, chantier name, ...) records the values users
+// actually type, namespaced by `field` (e.g. "point.type"), so suggestions
+// stay relevant per field without any hardcoded domain vocabulary. Global
+// for now (no multi-company model yet) — adding a companyId later to scope
+// suggestions per company is a non-breaking extension of this shape.
+model TermValue {
+  id         String   @id @default(cuid())
+  field      String
+  value      String
+  useCount   Int      @default(1)
+  lastUsedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@unique([field, value])
+  @@index([field])
+}
+
 model Report {
   id            String   @id @default(cuid())
   chantierId    String

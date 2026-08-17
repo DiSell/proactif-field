@@ -5,6 +5,7 @@ import {
   PhotoDTO,
   PlanDTO,
   PointDTO,
+  TermSuggestionDTO,
   UpdatePointInput,
 } from "@proactif-field/shared";
 import { apiDelete, apiGet, apiPatchJson, apiPostForm, apiPostJson } from "./client";
@@ -108,6 +109,25 @@ export function useUploadPhoto(planId: string | undefined, pointId: string | und
       qc.invalidateQueries({ queryKey: ["points", pointId, "photos"] });
       qc.invalidateQueries({ queryKey: ["plans", planId, "points"] });
     },
+  });
+}
+
+export function useTermSuggestions(field: string, query: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["terms", field, query],
+    queryFn: () =>
+      apiGet<{ suggestions: TermSuggestionDTO[] }>(
+        `/api/terms?field=${encodeURIComponent(field)}&q=${encodeURIComponent(query)}`
+      ).then((r) => r.suggestions),
+    enabled,
+    staleTime: 10000,
+  });
+}
+
+export function useRecordTerm() {
+  return useMutation({
+    mutationFn: (input: { field: string; value: string }) =>
+      apiPostJson<{ suggestion: TermSuggestionDTO }>("/api/terms", input),
   });
 }
 

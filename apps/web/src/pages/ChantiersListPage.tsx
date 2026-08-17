@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 import { useChantiers, useCreateChantier } from "../api/hooks";
 import { useAuthStore } from "../auth/store";
+import AutocompleteInput from "../components/AutocompleteInput";
 
 export default function ChantiersListPage() {
   const { data: chantiers, isLoading } = useChantiers();
@@ -42,11 +43,11 @@ export default function ChantiersListPage() {
           <form onSubmit={submit} className="card">
             <div className="field">
               <label>Nom du chantier</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus />
+              <AutocompleteInput field="chantier.name" value={name} onChange={setName} required autoFocus />
             </div>
             <div className="field">
               <label>Adresse (optionnel)</label>
-              <input value={address} onChange={(e) => setAddress(e.target.value)} />
+              <AutocompleteInput field="chantier.address" value={address} onChange={setAddress} />
             </div>
             <button className="btn block" type="submit" disabled={createChantier.isPending}>
               Créer

@@ -90,6 +90,12 @@ export interface UpdatePointInput {
   y?: number;
 }
 
+export interface TermSuggestionDTO {
+  value: string;
+  useCount: number;
+  lastUsedAt: string;
+}
+
 export interface CreatePhotoInput {
   takenAt: string;
   gpsLat?: number | null;
