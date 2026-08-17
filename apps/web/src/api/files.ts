@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiFetchBlob } from "./client";
 
 type FileKind = "plans" | "photos" | "reports";
@@ -10,27 +10,45 @@ export function getFileObjectUrl(kind: FileKind, id: string): Promise<string> {
   let cached = blobUrlCache.get(key);
   if (!cached) {
     cached = apiFetchBlob(`/api/files/${key}`).then((blob) => URL.createObjectURL(blob));
+    cached.catch(() => blobUrlCache.delete(key));
     blobUrlCache.set(key, cached);
   }
   return cached;
 }
 
-export function useFileObjectUrl(kind: FileKind, id: string | null | undefined): string | null {
+export interface FileObjectUrlState {
+  url: string | null;
+  error: boolean;
+  retry: () => void;
+}
+
+export function useFileObjectUrl(kind: FileKind, id: string | null | undefined): FileObjectUrlState {
   const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!id) {
       setUrl(null);
+      setError(false);
       return;
     }
     let cancelled = false;
-    getFileObjectUrl(kind, id).then((resolved) => {
-      if (!cancelled) setUrl(resolved);
-    });
+    setError(false);
+    getFileObjectUrl(kind, id).then(
+      (resolved) => {
+        if (!cancelled) setUrl(resolved);
+      },
+      () => {
+        if (!cancelled) setError(true);
+      }
+    );
     return () => {
       cancelled = true;
     };
-  }, [kind, id]);
+  }, [kind, id, attempt]);
 
-  return url;
+  const retry = useCallback(() => setAttempt((a) => a + 1), []);
+
+  return { url, error, retry };
 }

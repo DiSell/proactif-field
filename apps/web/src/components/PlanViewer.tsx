@@ -48,8 +48,20 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint 
   );
 }
 
+function LoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div style={{ padding: 40, color: "#94a3b8", textAlign: "center" }}>
+      <p>Le plan n'a pas pu être chargé.</p>
+      <button className="btn secondary" onClick={onRetry}>
+        Réessayer
+      </button>
+    </div>
+  );
+}
+
 function PlanImage({ planId }: { planId: string }) {
-  const url = useFileObjectUrl("plans", planId);
+  const { url, error, retry } = useFileObjectUrl("plans", planId);
+  if (error) return <LoadError onRetry={retry} />;
   if (!url) return <div style={{ padding: 40, color: "#94a3b8" }}>Chargement du plan…</div>;
   return <img src={url} alt="Plan" draggable={false} />;
 }
@@ -57,27 +69,39 @@ function PlanImage({ planId }: { planId: string }) {
 function PdfPage({ planId }: { planId: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    apiFetchArrayBuffer(`/api/files/plans/${planId}`).then(async (buffer) => {
-      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-      const page = await pdf.getPage(1);
-      const viewport = page.getViewport({ scale: 2 });
-      const canvas = canvasRef.current;
-      if (!canvas || cancelled) return;
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      if (!cancelled) setLoading(false);
-    });
+    setError(false);
+    apiFetchArrayBuffer(`/api/files/plans/${planId}`)
+      .then(async (buffer) => {
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const page = await pdf.getPage(1);
+        const viewport = page.getViewport({ scale: 2 });
+        const canvas = canvasRef.current;
+        if (!canvas || cancelled) return;
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        if (!cancelled) setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLoading(false);
+          setError(true);
+        }
+      });
     return () => {
       cancelled = true;
     };
-  }, [planId]);
+  }, [planId, attempt]);
+
+  if (error) return <LoadError onRetry={() => setAttempt((a) => a + 1)} />;
 
   return (
     <>

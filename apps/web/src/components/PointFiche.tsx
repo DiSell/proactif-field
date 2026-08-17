@@ -197,10 +197,29 @@ function PhotoThumb({
   gpsLng: number | null;
   gpsAccuracy: number | null;
 }) {
-  const url = useFileObjectUrl("photos", photoId);
+  const { url, error, retry } = useFileObjectUrl("photos", photoId);
   return (
     <div>
-      {url ? <img src={url} alt="" /> : <div style={{ aspectRatio: 1, background: "#334155", borderRadius: 8 }} />}
+      {error ? (
+        <button
+          onClick={retry}
+          style={{
+            aspectRatio: 1,
+            width: "100%",
+            background: "#334155",
+            borderRadius: 8,
+            border: "none",
+            color: "#fca5a5",
+            fontSize: 11,
+          }}
+        >
+          Échec — réessayer
+        </button>
+      ) : url ? (
+        <img src={url} alt="" />
+      ) : (
+        <div style={{ aspectRatio: 1, background: "#334155", borderRadius: 8 }} />
+      )}
       <div className="photo-meta">{formatDateTime(takenAt)}</div>
       <div className="photo-meta">{formatGps(gpsLat, gpsLng, gpsAccuracy)}</div>
     </div>
