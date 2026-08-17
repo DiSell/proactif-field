@@ -45,3 +45,20 @@ export async function removePendingPhoto(id: string): Promise<void> {
   const db = await dbPromise;
   await db.delete("pendingPhotos", id);
 }
+
+export async function updatePendingPhotoGps(
+  id: string,
+  gps: { lat: number; lng: number; accuracy: number }
+): Promise<void> {
+  const db = await dbPromise;
+  const existing = await db.get("pendingPhotos", id);
+  // The photo may already have synced (and been removed) by the time GPS
+  // resolves in the background — that's fine, just skip.
+  if (!existing) return;
+  await db.put("pendingPhotos", {
+    ...existing,
+    gpsLat: gps.lat,
+    gpsLng: gps.lng,
+    gpsAccuracy: gps.accuracy,
+  });
+}

@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { PointDTO, PointStatut } from "@proactif-field/shared";
 import { useDeletePoint, usePhotos, useUpdatePoint } from "../api/hooks";
 import { useFileObjectUrl } from "../api/files";
-import { addPendingPhoto, getPendingPhotosForPoint, PendingPhoto, removePendingPhoto } from "../offline/db";
+import {
+  addPendingPhoto,
+  getPendingPhotosForPoint,
+  PendingPhoto,
+  removePendingPhoto,
+  updatePendingPhotoGps,
+} from "../offline/db";
 import { onSyncChange, trySync } from "../offline/syncManager";
 import { getCurrentPositionSafe } from "../utils/geolocation";
 import StatusBadge from "./StatusBadge";
@@ -56,20 +62,23 @@ export default function PointFiche({ planId, point, onClose }: Props) {
     if (!file) return;
 
     setCapturing(true);
+    const pendingId = crypto.randomUUID();
     try {
       const takenAt = new Date().toISOString();
-      const gps = await getCurrentPositionSafe();
 
+      // Save immediately without waiting on GPS, so the button frees up right
+      // away and the next photo can be taken without delay — GPS is attached
+      // in the background afterwards if/when it resolves.
       await addPendingPhoto({
-        id: crypto.randomUUID(),
+        id: pendingId,
         planId,
         pointId: point.id,
         blob: file,
         fileName: file.name || `photo-${Date.now()}.jpg`,
         takenAt,
-        gpsLat: gps?.lat ?? null,
-        gpsLng: gps?.lng ?? null,
-        gpsAccuracy: gps?.accuracy ?? null,
+        gpsLat: null,
+        gpsLng: null,
+        gpsAccuracy: null,
         createdAt: new Date().toISOString(),
       });
 
@@ -79,6 +88,10 @@ export default function PointFiche({ planId, point, onClose }: Props) {
     } finally {
       setCapturing(false);
     }
+
+    getCurrentPositionSafe().then((gps) => {
+      if (gps) void updatePendingPhotoGps(pendingId, gps);
+    });
   }
 
   async function cancelPending(id: string) {
