@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuthStore } from "./auth/store";
-import { startSyncLoop, onSyncChange } from "./offline/syncManager";
+import { startSyncLoop, onSyncChange, getLastSyncError } from "./offline/syncManager";
 import { getPendingPhotos } from "./offline/db";
 import LoginPage from "./pages/LoginPage";
 import ChantiersListPage from "./pages/ChantiersListPage";
@@ -15,9 +15,13 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 
 function SyncBanner() {
   const [pendingCount, setPendingCount] = useState(0);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   useEffect(() => {
-    const refresh = () => getPendingPhotos().then((list) => setPendingCount(list.length));
+    const refresh = () => {
+      getPendingPhotos().then((list) => setPendingCount(list.length));
+      setLastError(getLastSyncError());
+    };
     refresh();
     return onSyncChange(refresh);
   }, []);
@@ -26,6 +30,7 @@ function SyncBanner() {
   return (
     <div className="sync-banner">
       {pendingCount} photo{pendingCount > 1 ? "s" : ""} en attente de synchronisation…
+      {lastError && <div className="sync-banner-error">Dernière erreur : {lastError}</div>}
     </div>
   );
 }

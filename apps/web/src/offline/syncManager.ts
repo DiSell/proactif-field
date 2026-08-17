@@ -1,14 +1,19 @@
-import { apiPostForm } from "../api/client";
+import { apiPostForm, ApiError } from "../api/client";
 import { queryClient } from "../api/queryClient";
 import { PhotoDTO } from "@proactif-field/shared";
 import { getPendingPhotos, removePendingPhoto } from "./db";
 
 let syncing = false;
+let lastError: string | null = null;
 const listeners = new Set<() => void>();
 
 export function onSyncChange(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+export function getLastSyncError(): string | null {
+  return lastError;
 }
 
 function notify() {
@@ -33,8 +38,12 @@ export async function trySync(): Promise<void> {
         await removePendingPhoto(photo.id);
         queryClient.invalidateQueries({ queryKey: ["points", photo.pointId, "photos"] });
         queryClient.invalidateQueries({ queryKey: ["plans", photo.planId, "points"] });
-      } catch {
-        // Laisse la photo en attente, on réessaiera au prochain cycle.
+        lastError = null;
+      } catch (err) {
+        // Laisse la photo en attente, on réessaiera au prochain cycle — mais
+        // on garde le message pour pouvoir l'afficher et diagnostiquer.
+        lastError = err instanceof ApiError ? err.message : err instanceof Error ? err.message : "Erreur inconnue";
+        console.error("Échec de synchronisation d'une photo", err);
       }
     }
   } finally {
