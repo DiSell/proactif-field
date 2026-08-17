@@ -1,0 +1,96 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum PointStatut {
+  GRIS
+  ORANGE
+  VERT
+}
+
+enum PlanFileType {
+  PDF
+  PNG
+  JPG
+  SVG
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime   @default(now())
+  chantiers    Chantier[] @relation("ChantierCreatedBy")
+  reports      Report[]
+}
+
+model Chantier {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  address     String?
+  createdById String
+  createdBy   User     @relation("ChantierCreatedBy", fields: [createdById], references: [id])
+  plans       Plan[]
+  reports     Report[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Plan {
+  id         String       @id @default(cuid())
+  chantierId String
+  chantier   Chantier     @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  fileName   String
+  filePath   String
+  fileType   PlanFileType
+  width      Int?
+  height     Int?
+  points     Point[]
+  uploadedAt DateTime     @default(now())
+}
+
+model Point {
+  id          String      @id @default(cuid())
+  planId      String
+  plan        Plan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  identifiant String
+  nom         String?
+  type        String?
+  commentaire String?
+  statut      PointStatut @default(GRIS)
+  x           Float
+  y           Float
+  photos      Photo[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Photo {
+  id          String   @id @default(cuid())
+  pointId     String
+  point       Point    @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  filePath    String
+  takenAt     DateTime
+  gpsLat      Float?
+  gpsLng      Float?
+  gpsAccuracy Float?
+  createdAt   DateTime @default(now())
+}
+
+model Report {
+  id            String   @id @default(cuid())
+  chantierId    String
+  chantier      Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  filePath      String
+  generatedById String
+  generatedBy   User     @relation(fields: [generatedById], references: [id])
+  generatedAt   DateTime @default(now())
+}
