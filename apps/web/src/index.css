@@ -218,6 +218,8 @@ select {
 
 .plan-content {
   position: relative;
+  will-change: transform;
+  backface-visibility: hidden;
 }
 
 .plan-content img,

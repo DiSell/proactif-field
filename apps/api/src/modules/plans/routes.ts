@@ -1,10 +1,13 @@
 import { Router } from "express";
 import path from "path";
+import fs from "fs";
+import sharp from "sharp";
 import { prisma } from "../../config/db";
 import { requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { uploadPlan } from "../../middleware/upload";
+import { absolutePathFor } from "../../utils/storage";
 import { toPlanDTO } from "./mapper";
 import { PlanFileType } from "@prisma/client";
 
@@ -15,6 +18,36 @@ const extToFileType: Record<string, PlanFileType> = {
   ".jpeg": "JPG",
   ".svg": "SVG",
 };
+
+// Plans photographed on-site with a phone camera can be huge (several MB, 4000px+),
+// which makes pan/zoom janky on mobile. Downscale and re-encode so the browser has
+// much less data to decode and composite. .rotate() also auto-applies EXIF
+// orientation, fixing the "photo displays sideways" issue common with phone cameras.
+const MAX_PLAN_DIMENSION = 2400;
+
+async function optimizeRasterPlan(relativePath: string, fileType: PlanFileType): Promise<void> {
+  if (fileType !== "PNG" && fileType !== "JPG") return;
+  try {
+    const absPath = absolutePathFor(relativePath);
+    const pipeline = sharp(absPath).rotate();
+    const metadata = await pipeline.metadata();
+    if ((metadata.width ?? 0) > MAX_PLAN_DIMENSION || (metadata.height ?? 0) > MAX_PLAN_DIMENSION) {
+      pipeline.resize({
+        width: MAX_PLAN_DIMENSION,
+        height: MAX_PLAN_DIMENSION,
+        fit: "inside",
+        withoutEnlargement: true,
+      });
+    }
+    const buffer =
+      fileType === "JPG"
+        ? await pipeline.jpeg({ quality: 85, mozjpeg: true }).toBuffer()
+        : await pipeline.png({ compressionLevel: 8 }).toBuffer();
+    await fs.promises.writeFile(absPath, buffer);
+  } catch (err) {
+    console.error(`Optimisation du plan ${relativePath} échouée, fichier original conservé`, err);
+  }
+}
 
 export const chantierPlansRouter = Router({ mergeParams: true });
 chantierPlansRouter.use(requireAuth);
@@ -42,11 +75,14 @@ chantierPlansRouter.post(
     const fileType = extToFileType[ext];
     if (!fileType) throw new HttpError(400, "Type de fichier non supporté");
 
+    const filePath = path.join("plans", req.file.filename);
+    await optimizeRasterPlan(filePath, fileType);
+
     const plan = await prisma.plan.create({
       data: {
         chantierId: chantier.id,
         fileName: req.file.originalname,
-        filePath: path.join("plans", req.file.filename),
+        filePath,
         fileType,
       },
     });
