@@ -8,6 +8,16 @@ import { toChantierDTO } from "./mapper";
 
 const withAssignments = { include: { assignments: true } } as const;
 
+// Simple per-organization sequential reference (CH-0001, CH-0002, ...),
+// matching the scheme used to backfill pre-existing chantiers. Not
+// concurrency-safe against two simultaneous creates in the same org, which
+// is an acceptable tradeoff at this scale (an ADMIN creating chantiers
+// one at a time).
+async function nextChantierReference(organizationId: string): Promise<string> {
+  const count = await prisma.chantier.count({ where: { organizationId } });
+  return `CH-${String(count + 1).padStart(4, "0")}`;
+}
+
 export const chantiersRouter = Router();
 chantiersRouter.use(requireAuth);
 
@@ -40,8 +50,10 @@ chantiersRouter.post(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const input = createSchema.parse(req.body);
+    const organizationId = req.auth!.organizationId;
+    const reference = await nextChantierReference(organizationId);
     const chantier = await prisma.chantier.create({
-      data: { ...input, createdById: req.auth!.userId, organizationId: req.auth!.organizationId },
+      data: { ...input, reference, createdById: req.auth!.userId, organizationId },
       ...withAssignments,
     });
     res.status(201).json({ chantier: toChantierDTO(chantier) });
