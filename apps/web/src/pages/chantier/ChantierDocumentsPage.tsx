@@ -5,6 +5,7 @@ import { useDeleteDocument, useDocuments, useUploadDocument } from "../../api/ho
 import { apiFetchBlob, ApiError } from "../../api/client";
 import { useAuthStore } from "../../auth/store";
 import AutocompleteInput from "../../components/AutocompleteInput";
+import DocumentPreview from "../../components/DocumentPreview";
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
@@ -28,6 +29,7 @@ export default function ChantierDocumentsPage() {
   const [commentaire, setCommentaire] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<{ id: string; fileName: string } | null>(null);
 
   function resetForm() {
     setFile(null);
@@ -136,7 +138,7 @@ export default function ChantierDocumentsPage() {
       {documents?.length === 0 && <p style={{ color: "#94a3b8" }}>Aucun document pour l'instant.</p>}
       {documents?.map((doc) => (
         <div key={doc.id} className="card user-card">
-          <div>
+          <div style={{ cursor: "pointer" }} onClick={() => setPreviewDoc({ id: doc.id, fileName: doc.fileName })}>
             <h3>{doc.name}</h3>
             <p>
               {doc.category}
@@ -146,6 +148,12 @@ export default function ChantierDocumentsPage() {
             {doc.commentaire && <p>{doc.commentaire}</p>}
           </div>
           <div className="user-card-actions">
+            <button
+              className="btn secondary"
+              onClick={() => setPreviewDoc({ id: doc.id, fileName: doc.fileName })}
+            >
+              👁️
+            </button>
             <button
               className="btn secondary"
               onClick={() => download(doc.id, doc.fileName)}
@@ -161,6 +169,15 @@ export default function ChantierDocumentsPage() {
           </div>
         </div>
       ))}
+
+      {previewDoc && (
+        <DocumentPreview
+          documentId={previewDoc.id}
+          fileName={previewDoc.fileName}
+          onClose={() => setPreviewDoc(null)}
+          onDownload={() => download(previewDoc.id, previewDoc.fileName)}
+        />
+      )}
     </div>
   );
 }
