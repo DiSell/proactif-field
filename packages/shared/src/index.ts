@@ -159,6 +159,21 @@ export interface CreatePhotoInput {
   gpsAccuracy?: number | null;
 }
 
+export interface DocumentDTO {
+  id: string;
+  chantierId: string;
+  category: string;
+  name: string;
+  version: string | null;
+  date: string | null;
+  author: string | null;
+  commentaire: string | null;
+  fileName: string;
+  uploadedById: string;
+  uploadedByName: string;
+  createdAt: string;
+}
+
 export interface CreateUserInput {
   name: string;
   email: string;

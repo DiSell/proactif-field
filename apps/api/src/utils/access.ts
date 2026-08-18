@@ -51,3 +51,10 @@ export async function assertReportAccess(reportId: string, auth: AuthContext): P
   await assertChantierAccess(report.chantierId, auth);
   return report;
 }
+
+export async function assertDocumentAccess(documentId: string, auth: AuthContext): Promise<{ chantierId: string }> {
+  const doc = await prisma.document.findUnique({ where: { id: documentId }, select: { chantierId: true } });
+  if (!doc) throw new HttpError(404, "Document introuvable");
+  await assertChantierAccess(doc.chantierId, auth);
+  return doc;
+}

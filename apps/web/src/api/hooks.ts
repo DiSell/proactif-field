@@ -4,6 +4,7 @@ import {
   CreatePointInput,
   CreateUserInput,
   DashboardStatsDTO,
+  DocumentDTO,
   PhotoDTO,
   PlanDTO,
   PointDTO,
@@ -208,6 +209,34 @@ export function useDashboard() {
   return useQuery({
     queryKey: ["dashboard"],
     queryFn: () => apiGet<DashboardStatsDTO>("/api/dashboard"),
+  });
+}
+
+export function useDocuments(chantierId: string | undefined) {
+  return useQuery({
+    queryKey: ["chantiers", chantierId, "documents"],
+    queryFn: () =>
+      apiGet<{ documents: DocumentDTO[] }>(`/api/chantiers/${chantierId}/documents`).then((r) => r.documents),
+    enabled: !!chantierId,
+  });
+}
+
+export function useUploadDocument(chantierId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (form: FormData) =>
+      apiPostForm<{ document: DocumentDTO }>(`/api/chantiers/${chantierId}/documents`, form).then(
+        (r) => r.document
+      ),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chantiers", chantierId, "documents"] }),
+  });
+}
+
+export function useDeleteDocument(chantierId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/documents/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chantiers", chantierId, "documents"] }),
   });
 }
 

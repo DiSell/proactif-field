@@ -10,6 +10,7 @@ import { chantierPlansRouter, plansRouter } from "./modules/plans/routes";
 import { chantierPointsRouter, planPointsRouter, pointsRouter } from "./modules/points/routes";
 import { pointPhotosRouter, photosRouter } from "./modules/photos/routes";
 import { chantierReportsRouter, orgReportsRouter } from "./modules/reports/routes";
+import { chantierDocumentsRouter, documentsRouter } from "./modules/documents/routes";
 import { filesRouter } from "./modules/files/routes";
 import { termsRouter } from "./modules/terms/routes";
 import { usersRouter } from "./modules/users/routes";
@@ -29,6 +30,8 @@ export function createApp() {
   app.use("/api/chantiers", chantiersRouter);
   app.use("/api/chantiers/:id/plans", chantierPlansRouter);
   app.use("/api/chantiers/:id/reports", chantierReportsRouter);
+  app.use("/api/chantiers/:id/documents", chantierDocumentsRouter);
+  app.use("/api/documents", documentsRouter);
   app.use("/api/plans", plansRouter);
   app.use("/api/plans/:id/points", planPointsRouter);
   app.use("/api/chantiers/:id/points", chantierPointsRouter);

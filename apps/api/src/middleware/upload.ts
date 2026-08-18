@@ -31,3 +31,14 @@ function makeUploader(subdir: string, allowedExtensions: string[]) {
 
 export const uploadPlan = makeUploader("plans", [".pdf", ".png", ".jpg", ".jpeg", ".svg"]);
 export const uploadPhoto = makeUploader("photos", [".png", ".jpg", ".jpeg", ".webp", ".heic"]);
+export const uploadDocument = makeUploader("documents", [
+  ".pdf",
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".txt",
+]);
