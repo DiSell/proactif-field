@@ -12,6 +12,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [organizationName, setOrganizationName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -24,7 +25,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const path = mode === "login" ? "/api/auth/login" : "/api/auth/register";
-      const body = mode === "login" ? { email, password } : { email, password, name };
+      const body = mode === "login" ? { email, password } : { email, password, name, organizationName };
       const res = await apiPostJson<{ token: string; user: UserDTO }>(path, body);
       setAuth(res.token, res.user);
     } catch (err) {
@@ -41,10 +42,20 @@ export default function LoginPage() {
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 360 }}>
         {error && <div className="error-banner">{error}</div>}
         {mode === "register" && (
-          <div className="field">
-            <label>Nom</label>
-            <input value={name} onChange={(e) => setName(e.target.value)} required />
-          </div>
+          <>
+            <div className="field">
+              <label>Nom</label>
+              <input value={name} onChange={(e) => setName(e.target.value)} required />
+            </div>
+            <div className="field">
+              <label>Nom de l'entreprise</label>
+              <input
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                required
+              />
+            </div>
+          </>
         )}
         <div className="field">
           <label>Email</label>

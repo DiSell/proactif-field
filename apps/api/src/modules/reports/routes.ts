@@ -1,16 +1,22 @@
 import { Router } from "express";
 import { prisma } from "../../config/db";
-import { requireAuth } from "../../middleware/auth";
+import { requireAdmin, requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
+import { assertChantierAccess } from "../../utils/access";
 import { generateChantierReport } from "./service";
 import { toReportDTO } from "./mapper";
 
+const withRelations = { include: { chantier: true, generatedBy: true } } as const;
+
+// Reports are ADMIN-only per the roles spec (TECHNICIENs aren't listed as
+// able to view/download them).
 export const chantierReportsRouter = Router({ mergeParams: true });
-chantierReportsRouter.use(requireAuth);
+chantierReportsRouter.use(requireAuth, requireAdmin);
 
 chantierReportsRouter.post(
   "/",
   asyncHandler(async (req, res) => {
+    await assertChantierAccess(req.params.id, req.auth!);
     const report = await generateChantierReport(req.params.id, req.auth!.userId);
     res.status(201).json({ report: toReportDTO(report) });
   })
@@ -19,9 +25,27 @@ chantierReportsRouter.post(
 chantierReportsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
+    await assertChantierAccess(req.params.id, req.auth!);
     const reports = await prisma.report.findMany({
       where: { chantierId: req.params.id },
       orderBy: { generatedAt: "desc" },
+      ...withRelations,
+    });
+    res.json({ reports: reports.map(toReportDTO) });
+  })
+);
+
+// Org-wide listing for the /reports screen.
+export const orgReportsRouter = Router();
+orgReportsRouter.use(requireAuth, requireAdmin);
+
+orgReportsRouter.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const reports = await prisma.report.findMany({
+      where: { chantier: { organizationId: req.auth!.organizationId } },
+      orderBy: { generatedAt: "desc" },
+      ...withRelations,
     });
     res.json({ reports: reports.map(toReportDTO) });
   })

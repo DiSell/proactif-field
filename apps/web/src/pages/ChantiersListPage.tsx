@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
+import { UserRole } from "@proactif-field/shared";
 import { useChantiers, useCreateChantier } from "../api/hooks";
 import { useAuthStore } from "../auth/store";
 import AutocompleteInput from "../components/AutocompleteInput";
@@ -9,6 +10,7 @@ export default function ChantiersListPage() {
   const createChantier = useCreateChantier();
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === UserRole.ADMIN;
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -34,10 +36,27 @@ export default function ChantiersListPage() {
           {user?.name ?? "Déconnexion"}
         </button>
       </div>
+
+      {isAdmin && (
+        <div className="admin-nav">
+          <Link to="/dashboard" className="btn secondary">
+            📊 Tableau de bord
+          </Link>
+          <Link to="/admin/users" className="btn secondary">
+            👥 Utilisateurs
+          </Link>
+          <Link to="/reports" className="btn secondary">
+            📄 Rapports
+          </Link>
+        </div>
+      )}
+
       <div className="page">
-        <button className="btn block" onClick={() => setShowForm((v) => !v)} style={{ marginBottom: 16 }}>
-          {showForm ? "Annuler" : "+ Nouveau chantier"}
-        </button>
+        {isAdmin && (
+          <button className="btn block" onClick={() => setShowForm((v) => !v)} style={{ marginBottom: 16 }}>
+            {showForm ? "Annuler" : "+ Nouveau chantier"}
+          </button>
+        )}
 
         {showForm && (
           <form onSubmit={submit} className="card">

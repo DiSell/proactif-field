@@ -21,27 +21,65 @@ enum PlanFileType {
   SVG
 }
 
+enum UserRole {
+  ADMIN
+  TECHNICIEN
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  users      User[]
+  chantiers  Chantier[]
+  termValues TermValue[]
+}
+
 model User {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime   @default(now())
-  chantiers    Chantier[] @relation("ChantierCreatedBy")
-  reports      Report[]
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  name           String
+  role           UserRole     @default(ADMIN)
+  isActive       Boolean      @default(true)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+
+  chantiers          Chantier[]           @relation("ChantierCreatedBy")
+  reports            Report[]
+  chantierAssignments ChantierAssignment[]
 }
 
 model Chantier {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  address     String?
-  createdById String
-  createdBy   User     @relation("ChantierCreatedBy", fields: [createdById], references: [id])
-  plans       Plan[]
-  reports     Report[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String       @id @default(cuid())
+  name           String
+  description    String?
+  address        String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdById    String
+  createdBy      User         @relation("ChantierCreatedBy", fields: [createdById], references: [id])
+  plans          Plan[]
+  reports        Report[]
+  assignments    ChantierAssignment[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// Which technicians can access a given chantier. Only meaningful for
+// TECHNICIEN users — ADMINs see every chantier in their organization
+// regardless of assignment.
+model ChantierAssignment {
+  id         String   @id @default(cuid())
+  chantierId String
+  chantier   Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([chantierId, userId])
 }
 
 model Plan {
@@ -88,19 +126,20 @@ model Photo {
 // Generic, business-agnostic autocomplete library: every text field in the
 // app (point type, comment, chantier name, ...) records the values users
 // actually type, namespaced by `field` (e.g. "point.type"), so suggestions
-// stay relevant per field without any hardcoded domain vocabulary. Global
-// for now (no multi-company model yet) — adding a companyId later to scope
-// suggestions per company is a non-breaking extension of this shape.
+// stay relevant per field without any hardcoded domain vocabulary. Scoped
+// per organization so different companies never see each other's terms.
 model TermValue {
-  id         String   @id @default(cuid())
-  field      String
-  value      String
-  useCount   Int      @default(1)
-  lastUsedAt DateTime @default(now())
-  createdAt  DateTime @default(now())
+  id             String       @id @default(cuid())
+  field          String
+  value          String
+  useCount       Int          @default(1)
+  lastUsedAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
 
-  @@unique([field, value])
-  @@index([field])
+  @@unique([organizationId, field, value])
+  @@index([organizationId, field])
 }
 
 model Report {

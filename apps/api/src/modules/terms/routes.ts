@@ -27,6 +27,7 @@ termsRouter.get(
     const { field, q } = querySchema.parse(req.query);
     const terms = await prisma.termValue.findMany({
       where: {
+        organizationId: req.auth!.organizationId,
         field,
         ...(q ? { value: { contains: q, mode: "insensitive" } } : {}),
       },
@@ -41,10 +42,11 @@ termsRouter.post(
   "/",
   asyncHandler(async (req, res) => {
     const { field, value } = recordSchema.parse(req.body);
+    const organizationId = req.auth!.organizationId;
     const term = await prisma.termValue.upsert({
-      where: { field_value: { field, value } },
+      where: { organizationId_field_value: { organizationId, field, value } },
       update: { useCount: { increment: 1 }, lastUsedAt: new Date() },
-      create: { field, value },
+      create: { organizationId, field, value },
     });
     res.status(201).json({ suggestion: toTermSuggestionDTO(term) });
   })

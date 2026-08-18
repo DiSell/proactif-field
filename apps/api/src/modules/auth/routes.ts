@@ -13,6 +13,7 @@ const registerSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   name: z.string().min(1),
+  organizationName: z.string().min(1),
 });
 
 const loginSchema = z.object({
@@ -24,7 +25,12 @@ authRouter.post(
   "/register",
   asyncHandler(async (req, res) => {
     const input = registerSchema.parse(req.body);
-    const { token, user } = await registerUser(input.email, input.password, input.name);
+    const { token, user } = await registerUser(
+      input.email,
+      input.password,
+      input.name,
+      input.organizationName
+    );
     res.status(201).json({ token, user: toUserDTO(user) });
   })
 );

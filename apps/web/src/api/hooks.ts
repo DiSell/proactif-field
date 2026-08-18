@@ -2,11 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChantierDTO,
   CreatePointInput,
+  CreateUserInput,
+  DashboardStatsDTO,
   PhotoDTO,
   PlanDTO,
   PointDTO,
+  ReportDTO,
   TermSuggestionDTO,
   UpdatePointInput,
+  UpdateUserInput,
+  UserDTO,
 } from "@proactif-field/shared";
 import { apiDelete, apiGet, apiPatchJson, apiPostForm, apiPostJson } from "./client";
 
@@ -137,5 +142,69 @@ export function useGenerateReport(chantierId: string | undefined) {
       apiPostJson<{ report: { id: string } }>(`/api/chantiers/${chantierId}/reports`, {}).then(
         (r) => r.report
       ),
+  });
+}
+
+export function useAssignChantier(chantierId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      apiPostJson<{ chantier: ChantierDTO }>(`/api/chantiers/${chantierId}/assignments`, { userId }).then(
+        (r) => r.chantier
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chantiers"] });
+      qc.invalidateQueries({ queryKey: ["chantiers", chantierId] });
+    },
+  });
+}
+
+export function useUnassignChantier(chantierId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => apiDelete(`/api/chantiers/${chantierId}/assignments/${userId}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chantiers"] });
+      qc.invalidateQueries({ queryKey: ["chantiers", chantierId] });
+    },
+  });
+}
+
+export function useUsers() {
+  return useQuery({
+    queryKey: ["users"],
+    queryFn: () => apiGet<{ users: UserDTO[] }>("/api/users").then((r) => r.users),
+  });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateUserInput) =>
+      apiPostJson<{ user: UserDTO }>("/api/users", input).then((r) => r.user),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function useUpdateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateUserInput }) =>
+      apiPatchJson<{ user: UserDTO }>(`/api/users/${id}`, input).then((r) => r.user),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function useDashboard() {
+  return useQuery({
+    queryKey: ["dashboard"],
+    queryFn: () => apiGet<DashboardStatsDTO>("/api/dashboard"),
+  });
+}
+
+export function useOrgReports() {
+  return useQuery({
+    queryKey: ["reports"],
+    queryFn: () => apiGet<{ reports: ReportDTO[] }>("/api/reports").then((r) => r.reports),
   });
 }

@@ -6,6 +6,9 @@ export function toUserDTO(user: User): UserDTO {
     id: user.id,
     email: user.email,
     name: user.name,
+    role: user.role as UserDTO["role"],
+    isActive: user.isActive,
+    organizationId: user.organizationId,
     createdAt: user.createdAt.toISOString(),
   };
 }

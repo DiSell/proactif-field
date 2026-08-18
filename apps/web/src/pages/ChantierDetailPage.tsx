@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { PointDTO } from "@proactif-field/shared";
+import { PointDTO, UserRole } from "@proactif-field/shared";
 import {
+  useAssignChantier,
   useChantier,
   useCreatePoint,
   useGenerateReport,
   usePlans,
   usePoints,
+  useUnassignChantier,
   useUploadPlan,
+  useUsers,
 } from "../api/hooks";
 import { apiFetchArrayBuffer } from "../api/client";
+import { useAuthStore } from "../auth/store";
 import PlanViewer from "../components/PlanViewer";
 import PointFiche from "../components/PointFiche";
 import ReportPreview from "../components/ReportPreview";
@@ -21,11 +25,14 @@ export default function ChantierDetailPage() {
   const uploadPlan = useUploadPlan(chantierId);
   const generateReport = useGenerateReport(chantierId);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const currentUser = useAuthStore((s) => s.user);
+  const isAdmin = currentUser?.role === UserRole.ADMIN;
 
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<PointDTO | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
   const [reportBuffer, setReportBuffer] = useState<ArrayBuffer | null>(null);
+  const [showAssign, setShowAssign] = useState(false);
 
   useEffect(() => {
     if (plans && plans.length > 0 && !activePlanId) {
@@ -94,9 +101,16 @@ export default function ChantierDetailPage() {
         <h1 style={{ flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis" }}>
           {chantier?.name}
         </h1>
-        <button className="btn secondary" onClick={handleGenerateReport} disabled={reportBusy}>
-          {reportBusy ? "…" : "📄 Rapport"}
-        </button>
+        {isAdmin && (
+          <div style={{ display: "flex", gap: 6 }}>
+            <button className="btn secondary" onClick={() => setShowAssign(true)}>
+              👥
+            </button>
+            <button className="btn secondary" onClick={handleGenerateReport} disabled={reportBusy}>
+              {reportBusy ? "…" : "📄 Rapport"}
+            </button>
+          </div>
+        )}
       </div>
 
       {plans && plans.length > 1 && (
@@ -111,9 +125,11 @@ export default function ChantierDetailPage() {
               {p.fileName}
             </button>
           ))}
-          <button className="btn secondary" style={{ flexShrink: 0 }} onClick={() => fileInputRef.current?.click()}>
-            + Plan
-          </button>
+          {isAdmin && (
+            <button className="btn secondary" style={{ flexShrink: 0 }} onClick={() => fileInputRef.current?.click()}>
+              + Plan
+            </button>
+          )}
         </div>
       )}
 
@@ -131,9 +147,13 @@ export default function ChantierDetailPage() {
         <div className="page">
           <div className="upload-zone">
             <p>Aucun plan importé pour ce chantier.</p>
-            <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={uploadPlan.isPending}>
-              {uploadPlan.isPending ? "Import…" : "Importer un plan (PDF, PNG, JPG, SVG)"}
-            </button>
+            {isAdmin ? (
+              <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={uploadPlan.isPending}>
+                {uploadPlan.isPending ? "Import…" : "Importer un plan (PDF, PNG, JPG, SVG)"}
+              </button>
+            ) : (
+              <p style={{ color: "#94a3b8" }}>En attente d'un plan importé par un administrateur.</p>
+            )}
           </div>
         </div>
       ) : (
@@ -156,6 +176,65 @@ export default function ChantierDetailPage() {
       {reportBuffer && (
         <ReportPreview arrayBuffer={reportBuffer} onClose={() => setReportBuffer(null)} onDownload={downloadReport} />
       )}
+
+      {showAssign && chantierId && chantier && (
+        <AssignTechniciansSheet
+          chantierId={chantierId}
+          assignedUserIds={chantier.assignedUserIds}
+          onClose={() => setShowAssign(false)}
+        />
+      )}
     </>
+  );
+}
+
+function AssignTechniciansSheet({
+  chantierId,
+  assignedUserIds,
+  onClose,
+}: {
+  chantierId: string;
+  assignedUserIds: string[];
+  onClose: () => void;
+}) {
+  const { data: users } = useUsers();
+  const assign = useAssignChantier(chantierId);
+  const unassign = useUnassignChantier(chantierId);
+  const technicians = users?.filter((u) => u.role === UserRole.TECHNICIEN) ?? [];
+
+  return (
+    <div className="sheet-overlay" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-header">
+          <h2 style={{ margin: 0 }}>Techniciens assignés</h2>
+          <button className="btn secondary" onClick={onClose}>
+            Fermer
+          </button>
+        </div>
+
+        {technicians.length === 0 && (
+          <p style={{ color: "#94a3b8" }}>
+            Aucun technicien dans l'entreprise. Ajoutes-en depuis la page "Utilisateurs".
+          </p>
+        )}
+
+        {technicians.map((tech) => {
+          const isAssigned = assignedUserIds.includes(tech.id);
+          return (
+            <label key={tech.id} className="assign-row">
+              <input
+                type="checkbox"
+                checked={isAssigned}
+                onChange={() =>
+                  isAssigned ? unassign.mutate(tech.id) : assign.mutate(tech.id)
+                }
+              />
+              <span>{tech.name}</span>
+              <span style={{ color: "#94a3b8", fontSize: 13 }}>{tech.email}</span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
   );
 }

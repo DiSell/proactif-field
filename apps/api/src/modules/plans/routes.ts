@@ -3,11 +3,12 @@ import path from "path";
 import fs from "fs";
 import sharp from "sharp";
 import { prisma } from "../../config/db";
-import { requireAuth } from "../../middleware/auth";
+import { requireAdmin, requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { uploadPlan } from "../../middleware/upload";
 import { absolutePathFor } from "../../utils/storage";
+import { assertChantierAccess, assertPlanAccess } from "../../utils/access";
 import { toPlanDTO } from "./mapper";
 import { PlanFileType } from "@prisma/client";
 
@@ -55,6 +56,7 @@ chantierPlansRouter.use(requireAuth);
 chantierPlansRouter.get(
   "/",
   asyncHandler(async (req, res) => {
+    await assertChantierAccess(req.params.id, req.auth!);
     const plans = await prisma.plan.findMany({
       where: { chantierId: req.params.id },
       orderBy: { uploadedAt: "desc" },
@@ -65,10 +67,10 @@ chantierPlansRouter.get(
 
 chantierPlansRouter.post(
   "/",
+  requireAdmin,
   uploadPlan.single("file"),
   asyncHandler(async (req, res) => {
-    const chantier = await prisma.chantier.findUnique({ where: { id: req.params.id } });
-    if (!chantier) throw new HttpError(404, "Chantier introuvable");
+    await assertChantierAccess(req.params.id, req.auth!);
     if (!req.file) throw new HttpError(400, "Aucun fichier reçu");
 
     const ext = path.extname(req.file.originalname).toLowerCase();
@@ -80,7 +82,7 @@ chantierPlansRouter.post(
 
     const plan = await prisma.plan.create({
       data: {
-        chantierId: chantier.id,
+        chantierId: req.params.id,
         fileName: req.file.originalname,
         filePath,
         fileType,
@@ -96,6 +98,7 @@ plansRouter.use(requireAuth);
 plansRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {
+    await assertPlanAccess(req.params.id, req.auth!);
     const plan = await prisma.plan.findUnique({ where: { id: req.params.id } });
     if (!plan) throw new HttpError(404, "Plan introuvable");
     res.json({ plan: toPlanDTO(plan) });
@@ -104,9 +107,9 @@ plansRouter.get(
 
 plansRouter.delete(
   "/:id",
+  requireAdmin,
   asyncHandler(async (req, res) => {
-    const plan = await prisma.plan.findUnique({ where: { id: req.params.id } });
-    if (!plan) throw new HttpError(404, "Plan introuvable");
+    await assertPlanAccess(req.params.id, req.auth!);
     await prisma.plan.delete({ where: { id: req.params.id } });
     res.status(204).send();
   })

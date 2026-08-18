@@ -140,6 +140,7 @@ export async function generateChantierReport(chantierId: string, generatedById: 
       filePath: path.join("reports", fileName),
       generatedById,
     },
+    include: { chantier: true, generatedBy: true },
   });
 
   return report;

@@ -4,6 +4,7 @@ import { prisma } from "../../config/db";
 import { requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
+import { assertPlanAccess, assertPointAccess } from "../../utils/access";
 import { toPointDTO } from "./mapper";
 import { PointStatut } from "@prisma/client";
 
@@ -35,6 +36,7 @@ planPointsRouter.use(requireAuth);
 planPointsRouter.get(
   "/",
   asyncHandler(async (req, res) => {
+    await assertPlanAccess(req.params.id, req.auth!);
     const points = await prisma.point.findMany({
       where: { planId: req.params.id },
       orderBy: { createdAt: "asc" },
@@ -47,11 +49,10 @@ planPointsRouter.get(
 planPointsRouter.post(
   "/",
   asyncHandler(async (req, res) => {
-    const plan = await prisma.plan.findUnique({ where: { id: req.params.id } });
-    if (!plan) throw new HttpError(404, "Plan introuvable");
+    await assertPlanAccess(req.params.id, req.auth!);
     const input = createSchema.parse(req.body);
     const point = await prisma.point.create({
-      data: { ...input, planId: plan.id },
+      data: { ...input, planId: req.params.id },
       ...withCount,
     });
     res.status(201).json({ point: toPointDTO(point) });
@@ -64,6 +65,7 @@ pointsRouter.use(requireAuth);
 pointsRouter.get(
   "/:id",
   asyncHandler(async (req, res) => {
+    await assertPointAccess(req.params.id, req.auth!);
     const point = await prisma.point.findUnique({ where: { id: req.params.id }, ...withCount });
     if (!point) throw new HttpError(404, "Point introuvable");
     res.json({ point: toPointDTO(point) });
@@ -73,8 +75,7 @@ pointsRouter.get(
 pointsRouter.patch(
   "/:id",
   asyncHandler(async (req, res) => {
-    const existing = await prisma.point.findUnique({ where: { id: req.params.id } });
-    if (!existing) throw new HttpError(404, "Point introuvable");
+    await assertPointAccess(req.params.id, req.auth!);
     const input = updateSchema.parse(req.body);
     const point = await prisma.point.update({
       where: { id: req.params.id },
@@ -88,8 +89,7 @@ pointsRouter.patch(
 pointsRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {
-    const existing = await prisma.point.findUnique({ where: { id: req.params.id } });
-    if (!existing) throw new HttpError(404, "Point introuvable");
+    await assertPointAccess(req.params.id, req.auth!);
     await prisma.point.delete({ where: { id: req.params.id } });
     res.status(204).send();
   })

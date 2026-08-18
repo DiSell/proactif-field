@@ -6,6 +6,7 @@ import { requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { uploadPhoto } from "../../middleware/upload";
+import { assertPhotoAccess, assertPointAccess } from "../../utils/access";
 import { toPhotoDTO } from "./mapper";
 import { deleteFile } from "../../utils/storage";
 
@@ -22,6 +23,7 @@ pointPhotosRouter.use(requireAuth);
 pointPhotosRouter.get(
   "/",
   asyncHandler(async (req, res) => {
+    await assertPointAccess(req.params.id, req.auth!);
     const photos = await prisma.photo.findMany({
       where: { pointId: req.params.id },
       orderBy: { takenAt: "asc" },
@@ -34,15 +36,14 @@ pointPhotosRouter.post(
   "/",
   uploadPhoto.single("file"),
   asyncHandler(async (req, res) => {
-    const point = await prisma.point.findUnique({ where: { id: req.params.id } });
-    if (!point) throw new HttpError(404, "Point introuvable");
+    await assertPointAccess(req.params.id, req.auth!);
     if (!req.file) throw new HttpError(400, "Aucun fichier reçu");
 
     const input = metaSchema.parse(req.body);
 
     const photo = await prisma.photo.create({
       data: {
-        pointId: point.id,
+        pointId: req.params.id,
         filePath: path.join("photos", req.file.filename),
         takenAt: new Date(input.takenAt),
         gpsLat: input.gpsLat ?? null,
@@ -51,7 +52,8 @@ pointPhotosRouter.post(
       },
     });
 
-    if (point.statut === "GRIS") {
+    const point = await prisma.point.findUnique({ where: { id: req.params.id } });
+    if (point?.statut === "GRIS") {
       await prisma.point.update({ where: { id: point.id }, data: { statut: "ORANGE" } });
     }
 
@@ -65,6 +67,7 @@ photosRouter.use(requireAuth);
 photosRouter.delete(
   "/:id",
   asyncHandler(async (req, res) => {
+    await assertPhotoAccess(req.params.id, req.auth!);
     const photo = await prisma.photo.findUnique({ where: { id: req.params.id } });
     if (!photo) throw new HttpError(404, "Photo introuvable");
     await prisma.photo.delete({ where: { id: req.params.id } });

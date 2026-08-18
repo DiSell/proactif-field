@@ -9,9 +9,11 @@ import { chantiersRouter } from "./modules/chantiers/routes";
 import { chantierPlansRouter, plansRouter } from "./modules/plans/routes";
 import { planPointsRouter, pointsRouter } from "./modules/points/routes";
 import { pointPhotosRouter, photosRouter } from "./modules/photos/routes";
-import { chantierReportsRouter } from "./modules/reports/routes";
+import { chantierReportsRouter, orgReportsRouter } from "./modules/reports/routes";
 import { filesRouter } from "./modules/files/routes";
 import { termsRouter } from "./modules/terms/routes";
+import { usersRouter } from "./modules/users/routes";
+import { dashboardRouter } from "./modules/dashboard/routes";
 
 export function createApp() {
   const app = express();
@@ -34,6 +36,9 @@ export function createApp() {
   app.use("/api/photos", photosRouter);
   app.use("/api/files", filesRouter);
   app.use("/api/terms", termsRouter);
+  app.use("/api/users", usersRouter);
+  app.use("/api/dashboard", dashboardRouter);
+  app.use("/api/reports", orgReportsRouter);
 
   app.use(errorHandler);
 

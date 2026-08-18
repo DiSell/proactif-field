@@ -11,10 +11,24 @@ export enum PlanFileType {
   SVG = "SVG",
 }
 
+export enum UserRole {
+  ADMIN = "ADMIN",
+  TECHNICIEN = "TECHNICIEN",
+}
+
+export interface OrganizationDTO {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
 export interface UserDTO {
   id: string;
   email: string;
   name: string;
+  role: UserRole;
+  isActive: boolean;
+  organizationId: string;
   createdAt: string;
 }
 
@@ -23,7 +37,9 @@ export interface ChantierDTO {
   name: string;
   description: string | null;
   address: string | null;
+  organizationId: string;
   createdById: string;
+  assignedUserIds: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -66,8 +82,19 @@ export interface PhotoDTO {
 export interface ReportDTO {
   id: string;
   chantierId: string;
+  chantierName: string;
   generatedAt: string;
   generatedById: string;
+  generatedByName: string;
+}
+
+export interface DashboardStatsDTO {
+  chantierCount: number;
+  pointCount: number;
+  pointCompleteCount: number;
+  progressPercent: number;
+  recentChantiers: ChantierDTO[];
+  recentReports: ReportDTO[];
 }
 
 export interface CreatePointInput {
@@ -101,4 +128,17 @@ export interface CreatePhotoInput {
   gpsLat?: number | null;
   gpsLng?: number | null;
   gpsAccuracy?: number | null;
+}
+
+export interface CreateUserInput {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+}
+
+export interface UpdateUserInput {
+  name?: string;
+  role?: UserRole;
+  isActive?: boolean;
 }
