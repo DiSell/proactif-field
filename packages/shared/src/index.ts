@@ -32,16 +32,45 @@ export interface UserDTO {
   createdAt: string;
 }
 
+export enum ChantierStatut {
+  PREPARATION = "PREPARATION",
+  PRET = "PRET",
+  EN_COURS = "EN_COURS",
+  BLOQUE = "BLOQUE",
+  TERMINE = "TERMINE",
+  CLOTURE = "CLOTURE",
+}
+
 export interface ChantierDTO {
   id: string;
+  reference: string;
   name: string;
   description: string | null;
   address: string | null;
+  client: string | null;
+  entrepriseExecutante: string | null;
+  dateDebutPrevue: string | null;
+  dateFinPrevue: string | null;
+  statut: ChantierStatut;
   organizationId: string;
   createdById: string;
+  responsableId: string | null;
+  responsableName: string | null;
   assignedUserIds: string[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UpdateChantierInput {
+  name?: string;
+  description?: string | null;
+  address?: string | null;
+  client?: string | null;
+  entrepriseExecutante?: string | null;
+  dateDebutPrevue?: string | null;
+  dateFinPrevue?: string | null;
+  statut?: ChantierStatut;
+  responsableId?: string | null;
 }
 
 export interface PlanDTO {

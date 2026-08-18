@@ -1,5 +1,4 @@
 import { FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
 import { UserRole } from "@proactif-field/shared";
 import { useCreateUser, useUpdateUser, useUsers } from "../api/hooks";
 import { useAuthStore } from "../auth/store";
@@ -36,11 +35,7 @@ export default function AdminUsersPage() {
   return (
     <>
       <div className="topbar">
-        <Link to="/dashboard" className="btn secondary">
-          ← Tableau de bord
-        </Link>
         <h1>Utilisateurs</h1>
-        <div style={{ width: 90 }} />
       </div>
 
       <div className="page">

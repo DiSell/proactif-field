@@ -11,11 +11,7 @@ export default function DashboardPage() {
   return (
     <>
       <div className="topbar">
-        <Link to="/" className="btn secondary">
-          ← Chantiers
-        </Link>
         <h1>Tableau de bord</h1>
-        <div style={{ width: 90 }} />
       </div>
 
       <div className="page">

@@ -71,6 +71,15 @@ export function usePoints(planId: string | undefined) {
   });
 }
 
+export function useChantierPoints(chantierId: string | undefined) {
+  return useQuery({
+    queryKey: ["chantiers", chantierId, "points"],
+    queryFn: () =>
+      apiGet<{ points: PointDTO[] }>(`/api/chantiers/${chantierId}/points`).then((r) => r.points),
+    enabled: !!chantierId,
+  });
+}
+
 export function useCreatePoint(planId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({

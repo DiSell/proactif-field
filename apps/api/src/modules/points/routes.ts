@@ -4,7 +4,7 @@ import { prisma } from "../../config/db";
 import { requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
-import { assertPlanAccess, assertPointAccess } from "../../utils/access";
+import { assertChantierAccess, assertPlanAccess, assertPointAccess } from "../../utils/access";
 import { toPointDTO } from "./mapper";
 import { PointStatut } from "@prisma/client";
 
@@ -56,6 +56,24 @@ planPointsRouter.post(
       ...withCount,
     });
     res.status(201).json({ point: toPointDTO(point) });
+  })
+);
+
+// Aggregated points across every plan of a chantier — for the "Points"
+// overview tab, as opposed to the per-plan list used by the plan viewer.
+export const chantierPointsRouter = Router({ mergeParams: true });
+chantierPointsRouter.use(requireAuth);
+
+chantierPointsRouter.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    await assertChantierAccess(req.params.id, req.auth!);
+    const points = await prisma.point.findMany({
+      where: { plan: { chantierId: req.params.id } },
+      orderBy: { createdAt: "asc" },
+      ...withCount,
+    });
+    res.json({ points: points.map(toPointDTO) });
   })
 );
 

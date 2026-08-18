@@ -8,7 +8,6 @@ import AutocompleteInput from "../components/AutocompleteInput";
 export default function ChantiersListPage() {
   const { data: chantiers, isLoading } = useChantiers();
   const createChantier = useCreateChantier();
-  const clearAuth = useAuthStore((s) => s.clearAuth);
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === UserRole.ADMIN;
 
@@ -28,28 +27,9 @@ export default function ChantiersListPage() {
   return (
     <>
       <div className="topbar">
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src="/logo-icon.svg" alt="" width={28} height={28} />
-          <h1>Chantiers</h1>
-        </div>
-        <button className="btn secondary" onClick={() => clearAuth()}>
-          {user?.name ?? "Déconnexion"}
-        </button>
+        <h1>Chantiers</h1>
+        <div style={{ width: 1 }} />
       </div>
-
-      {isAdmin && (
-        <div className="admin-nav">
-          <Link to="/dashboard" className="btn secondary">
-            📊 Tableau de bord
-          </Link>
-          <Link to="/admin/users" className="btn secondary">
-            👥 Utilisateurs
-          </Link>
-          <Link to="/reports" className="btn secondary">
-            📄 Rapports
-          </Link>
-        </div>
-      )}
 
       <div className="page">
         {isAdmin && (
@@ -79,7 +59,9 @@ export default function ChantiersListPage() {
         {chantiers?.map((c) => (
           <Link key={c.id} to={`/chantiers/${c.id}`} className="card-link">
             <div className="card">
-              <h3>{c.name}</h3>
+              <h3>
+                {c.name} <span style={{ color: "#94a3b8", fontWeight: 400 }}>· {c.reference}</span>
+              </h3>
               {c.address && <p>{c.address}</p>}
             </div>
           </Link>

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { useOrgReports } from "../api/hooks";
 import { apiFetchBlob } from "../api/client";
 
@@ -29,11 +28,7 @@ export default function ReportsPage() {
   return (
     <>
       <div className="topbar">
-        <Link to="/dashboard" className="btn secondary">
-          ← Tableau de bord
-        </Link>
         <h1>Rapports</h1>
-        <div style={{ width: 90 }} />
       </div>
 
       <div className="page">

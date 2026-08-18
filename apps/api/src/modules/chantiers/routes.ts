@@ -1,12 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
+import { ChantierStatut } from "@prisma/client";
 import { prisma } from "../../config/db";
 import { requireAdmin, requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { toChantierDTO } from "./mapper";
 
-const withAssignments = { include: { assignments: true } } as const;
+const withAssignments = { include: { assignments: true, responsable: true } } as const;
 
 // Simple per-organization sequential reference (CH-0001, CH-0002, ...),
 // matching the scheme used to backfill pre-existing chantiers. Not
@@ -25,9 +26,32 @@ const createSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   address: z.string().optional(),
+  client: z.string().optional(),
+  entrepriseExecutante: z.string().optional(),
+  dateDebutPrevue: z.string().datetime().optional(),
+  dateFinPrevue: z.string().datetime().optional(),
+  responsableId: z.string().optional(),
 });
 
-const updateSchema = createSchema.partial();
+const updateSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  client: z.string().nullable().optional(),
+  entrepriseExecutante: z.string().nullable().optional(),
+  dateDebutPrevue: z.string().datetime().nullable().optional(),
+  dateFinPrevue: z.string().datetime().nullable().optional(),
+  responsableId: z.string().nullable().optional(),
+  statut: z.nativeEnum(ChantierStatut).optional(),
+});
+
+async function assertResponsableInOrg(responsableId: string | null | undefined, organizationId: string) {
+  if (!responsableId) return;
+  const user = await prisma.user.findUnique({ where: { id: responsableId } });
+  if (!user || user.organizationId !== organizationId) {
+    throw new HttpError(404, "Responsable introuvable");
+  }
+}
 
 chantiersRouter.get(
   "/",
@@ -51,9 +75,17 @@ chantiersRouter.post(
   asyncHandler(async (req, res) => {
     const input = createSchema.parse(req.body);
     const organizationId = req.auth!.organizationId;
+    await assertResponsableInOrg(input.responsableId, organizationId);
     const reference = await nextChantierReference(organizationId);
     const chantier = await prisma.chantier.create({
-      data: { ...input, reference, createdById: req.auth!.userId, organizationId },
+      data: {
+        ...input,
+        dateDebutPrevue: input.dateDebutPrevue ? new Date(input.dateDebutPrevue) : undefined,
+        dateFinPrevue: input.dateFinPrevue ? new Date(input.dateFinPrevue) : undefined,
+        reference,
+        createdById: req.auth!.userId,
+        organizationId,
+      },
       ...withAssignments,
     });
     res.status(201).json({ chantier: toChantierDTO(chantier) });
@@ -84,9 +116,24 @@ chantiersRouter.patch(
     if (!existing || existing.organizationId !== req.auth!.organizationId) {
       throw new HttpError(404, "Chantier introuvable");
     }
+    await assertResponsableInOrg(input.responsableId, req.auth!.organizationId);
     const chantier = await prisma.chantier.update({
       where: { id: req.params.id },
-      data: input,
+      data: {
+        ...input,
+        dateDebutPrevue:
+          input.dateDebutPrevue !== undefined
+            ? input.dateDebutPrevue === null
+              ? null
+              : new Date(input.dateDebutPrevue)
+            : undefined,
+        dateFinPrevue:
+          input.dateFinPrevue !== undefined
+            ? input.dateFinPrevue === null
+              ? null
+              : new Date(input.dateFinPrevue)
+            : undefined,
+      },
       ...withAssignments,
     });
     res.json({ chantier: toChantierDTO(chantier) });
