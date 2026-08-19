@@ -61,6 +61,7 @@ export default function ChantiersListPage() {
             <div className="card">
               <h3>
                 {c.name} <span style={{ color: "#94a3b8", fontWeight: 400 }}>· {c.reference}</span>
+                {c.isNewAssignment && <span className="badge-new">Nouveau</span>}
               </h3>
               {c.address && <p>{c.address}</p>}
             </div>

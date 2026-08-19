@@ -57,6 +57,9 @@ export interface ChantierDTO {
   responsableId: string | null;
   responsableName: string | null;
   assignedUserIds: string[];
+  // True only when the requesting (technician) user has an assignment on
+  // this chantier they haven't opened yet. Always false for ADMIN.
+  isNewAssignment: boolean;
   createdAt: string;
   updatedAt: string;
 }

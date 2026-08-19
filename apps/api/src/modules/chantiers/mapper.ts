@@ -6,7 +6,11 @@ type ChantierWithRelations = Chantier & {
   responsable?: User | null;
 };
 
-export function toChantierDTO(chantier: ChantierWithRelations): ChantierDTO {
+export function toChantierDTO(chantier: ChantierWithRelations, viewerUserId?: string): ChantierDTO {
+  const viewerAssignment = viewerUserId
+    ? chantier.assignments.find((a) => a.userId === viewerUserId)
+    : undefined;
+
   return {
     id: chantier.id,
     reference: chantier.reference,
@@ -23,6 +27,7 @@ export function toChantierDTO(chantier: ChantierWithRelations): ChantierDTO {
     responsableId: chantier.responsableId,
     responsableName: chantier.responsable?.name ?? null,
     assignedUserIds: chantier.assignments.map((a) => a.userId),
+    isNewAssignment: viewerAssignment ? viewerAssignment.seenAt === null : false,
     createdAt: chantier.createdAt.toISOString(),
     updatedAt: chantier.updatedAt.toISOString(),
   };

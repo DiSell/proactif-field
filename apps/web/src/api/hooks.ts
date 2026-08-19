@@ -180,6 +180,14 @@ export function useUnassignChantier(chantierId: string | undefined) {
   });
 }
 
+export function useMarkAssignmentSeen(chantierId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiPostJson(`/api/chantiers/${chantierId}/assignments/seen`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chantiers"] }),
+  });
+}
+
 export function useUsers() {
   return useQuery({
     queryKey: ["users"],

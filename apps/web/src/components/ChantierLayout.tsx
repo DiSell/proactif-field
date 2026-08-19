@@ -1,6 +1,7 @@
+import { useEffect } from "react";
 import { Link, NavLink, Outlet, useParams } from "react-router-dom";
 import { UserRole } from "@proactif-field/shared";
-import { useChantier } from "../api/hooks";
+import { useChantier, useMarkAssignmentSeen } from "../api/hooks";
 import { useAuthStore } from "../auth/store";
 
 export default function ChantierLayout() {
@@ -8,6 +9,14 @@ export default function ChantierLayout() {
   const { data: chantier } = useChantier(chantierId);
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === UserRole.ADMIN;
+  const markSeen = useMarkAssignmentSeen(chantierId);
+
+  useEffect(() => {
+    if (chantier?.isNewAssignment) {
+      markSeen.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chantier?.isNewAssignment]);
 
   const base = `/chantiers/${chantierId}`;
   const tabs = [

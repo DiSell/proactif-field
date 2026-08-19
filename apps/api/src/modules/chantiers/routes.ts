@@ -65,7 +65,7 @@ chantiersRouter.get(
       orderBy: { createdAt: "desc" },
       ...withAssignments,
     });
-    res.json({ chantiers: chantiers.map(toChantierDTO) });
+    res.json({ chantiers: chantiers.map((c) => toChantierDTO(c, auth.userId)) });
   })
 );
 
@@ -103,7 +103,22 @@ chantiersRouter.get(
     if (auth.role === "TECHNICIEN" && !chantier.assignments.some((a) => a.userId === auth.userId)) {
       throw new HttpError(404, "Chantier introuvable");
     }
-    res.json({ chantier: toChantierDTO(chantier) });
+    res.json({ chantier: toChantierDTO(chantier, auth.userId) });
+  })
+);
+
+// Any authenticated user marks their own assignment as seen (clears the
+// "Nouveau" badge) — no admin requirement, this only affects the caller's
+// own row.
+chantiersRouter.post(
+  "/:id/assignments/seen",
+  asyncHandler(async (req, res) => {
+    const auth = req.auth!;
+    await prisma.chantierAssignment.updateMany({
+      where: { chantierId: req.params.id, userId: auth.userId, seenAt: null },
+      data: { seenAt: new Date() },
+    });
+    res.status(204).send();
   })
 );
 

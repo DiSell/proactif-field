@@ -108,12 +108,16 @@ model Chantier {
 // TECHNICIEN users — ADMINs see every chantier in their organization
 // regardless of assignment.
 model ChantierAssignment {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   chantierId String
-  chantier   Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  chantier   Chantier  @relation(fields: [chantierId], references: [id], onDelete: Cascade)
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  // Null until the assigned technician opens the chantier for the first
+  // time — drives the "Nouveau" badge in their chantier list. No email/push,
+  // just an in-app signal seen on next app open.
+  seenAt     DateTime?
 
   @@unique([chantierId, userId])
 }

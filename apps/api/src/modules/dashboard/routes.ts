@@ -39,7 +39,7 @@ dashboardRouter.get(
       pointCount,
       pointCompleteCount,
       progressPercent: pointCount === 0 ? 0 : Math.round((pointCompleteCount / pointCount) * 100),
-      recentChantiers: recentChantiers.map(toChantierDTO),
+      recentChantiers: recentChantiers.map((c) => toChantierDTO(c)),
       recentReports: recentReports.map(toReportDTO),
     };
 
