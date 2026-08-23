@@ -11,5 +11,7 @@ export function toUserDTO(user: User): UserDTO {
     organizationId: user.organizationId,
     createdAt: user.createdAt.toISOString(),
     invitationPending: user.invitedAt !== null && user.invitationAcceptedAt === null,
+    phone: user.phone,
+    employerCompany: user.employerCompany,
   };
 }

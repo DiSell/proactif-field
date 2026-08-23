@@ -94,6 +94,9 @@ model User {
   inviteExpiresAt DateTime?
   invitedAt       DateTime?
   invitationAcceptedAt DateTime?
+  deletedAt DateTime?
+  phone String?
+  employerCompany String?
 
   chantiers            Chantier[]           @relation("ChantierCreatedBy")
   chantiersResponsable Chantier[]           @relation("ChantierResponsable")

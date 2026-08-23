@@ -61,6 +61,8 @@ export interface UserDTO {
   organizationId: string;
   createdAt: string;
   invitationPending: boolean;
+  phone: string | null;
+  employerCompany: string | null;
 }
 
 export enum ChantierStatut {
@@ -283,10 +285,14 @@ export interface CreateUserInput {
   name: string;
   email: string;
   role: UserRole;
+  phone?: string;
+  employerCompany?: string;
 }
 
 export interface UpdateUserInput {
   name?: string;
   role?: UserRole;
   isActive?: boolean;
+  phone?: string | null;
+  employerCompany?: string | null;
 }

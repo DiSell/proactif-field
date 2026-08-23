@@ -275,6 +275,11 @@ export function useUpdateUser() {
   });
 }
 
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (id: string) => apiDelete(`/api/users/${id}`), onSuccess: () => { qc.invalidateQueries({ queryKey: ["users"] }); qc.invalidateQueries({ queryKey: ["chantiers"] }); } });
+}
+
 export function useDashboard() {
   return useQuery({
     queryKey: ["dashboard"],
