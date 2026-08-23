@@ -1,4 +1,4 @@
-const SHELL = "proactif-field-shell-v1";
+const SHELL = "proactif-field-shell-v2";
 const APP_SHELL = ["/", "/manifest.webmanifest", "/logo-icon.svg"];
 self.addEventListener("install", (event) => event.waitUntil(caches.open(SHELL).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting())));
 self.addEventListener("activate", (event) => event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((key) => key.startsWith("proactif-field-shell-") && key !== SHELL).map((key) => caches.delete(key)))).then(() => self.clients.claim())));
@@ -9,7 +9,13 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(fetch(request).then((response) => { const copy = response.clone(); caches.open(SHELL).then((cache) => cache.put("/", copy)); return response; }).catch(() => caches.match("/")));
     return;
   }
-  event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => { if (response.ok && ["script", "style", "font", "image"].includes(request.destination)) caches.open(SHELL).then((cache) => cache.put(request, response.clone())); return response; })));
+  event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+    if (response.ok && ["script", "style", "font", "image"].includes(request.destination)) {
+      const copy = response.clone();
+      event.waitUntil(caches.open(SHELL).then((cache) => cache.put(request, copy)).catch(() => undefined));
+    }
+    return response;
+  })));
 });
 self.addEventListener("push", (event) => {
   const data = event.data?.json() ?? {};
