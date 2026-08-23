@@ -1,5 +1,5 @@
 import path from "path";
-import { BlocagePriorite, BlocageStatut } from "@prisma/client";
+import { BlocagePhotoRole, BlocagePriorite, BlocageStatut } from "@prisma/client";
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../config/db";
@@ -11,9 +11,18 @@ import { assertBlocageAccess, assertChantierAccess, assertPointAccess } from "..
 import { toBlocageDTO } from "./mapper";
 
 const relations = { include: { point: { select: { identifiant: true } }, createdBy: { select: { name: true } }, resolvedBy: { select: { name: true } }, photos: { orderBy: { takenAt: "asc" as const } } } } as const;
-const createSchema = z.object({ id: z.string().min(1).optional(), titre: z.string().trim().min(1).max(160), description: z.string().trim().min(1).max(3000), priorite: z.nativeEnum(BlocagePriorite).default(BlocagePriorite.NORMALE) });
+const coordinate = z.number().min(0).max(1);
+const createSchema = z.object({ id: z.string().min(1).optional(), titre: z.string().trim().min(1).max(160), description: z.string().trim().min(1).max(3000), priorite: z.nativeEnum(BlocagePriorite).default(BlocagePriorite.NORMALE), startX: coordinate.optional(), startY: coordinate.optional(), endX: coordinate.optional(), endY: coordinate.optional(), startGpsLat: z.number().nullable().optional(), startGpsLng: z.number().nullable().optional(), startGpsAccuracy: z.number().nonnegative().nullable().optional(), endGpsLat: z.number().nullable().optional(), endGpsLng: z.number().nullable().optional(), endGpsAccuracy: z.number().nonnegative().nullable().optional() });
 const updateSchema = z.object({ titre: z.string().trim().min(1).max(160).optional(), description: z.string().trim().min(1).max(3000).optional(), priorite: z.nativeEnum(BlocagePriorite).optional(), statut: z.nativeEnum(BlocageStatut).optional() });
-const photoMetaSchema = z.object({ takenAt: z.string().datetime(), gpsLat: z.coerce.number().nullable().optional(), gpsLng: z.coerce.number().nullable().optional(), gpsAccuracy: z.coerce.number().nullable().optional() });
+const photoMetaSchema = z.object({ takenAt: z.string().datetime(), gpsLat: z.coerce.number().nullable().optional(), gpsLng: z.coerce.number().nullable().optional(), gpsAccuracy: z.coerce.number().nullable().optional(), blocageRole: z.nativeEnum(BlocagePhotoRole).default(BlocagePhotoRole.BLOCAGE) });
+
+function gpsDistanceMeters(aLat?: number | null, aLng?: number | null, bLat?: number | null, bLng?: number | null): number | null {
+  if (aLat == null || aLng == null || bLat == null || bLng == null) return null;
+  const rad = (value: number) => value * Math.PI / 180;
+  const dLat = rad(bLat - aLat); const dLng = rad(bLng - aLng);
+  const value = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
 
 export const chantierBlocagesRouter = Router({ mergeParams: true });
 chantierBlocagesRouter.use(requireAuth);
@@ -37,7 +46,7 @@ pointBlocagesRouter.post("/", asyncHandler(async (req, res) => {
   const plan = await prisma.plan.findUnique({ where: { id: planId }, include: { chantier: { select: { id: true, organizationId: true } } } });
   if (!plan) throw new HttpError(404, "Point introuvable");
   const blocage = await prisma.$transaction(async (tx) => {
-    const created = await tx.blocage.create({ data: { ...input, pointId: req.params.id, chantierId: plan.chantier.id, organizationId: plan.chantier.organizationId, createdById: req.auth!.userId }, ...relations });
+    const created = await tx.blocage.create({ data: { ...input, distanceMeters: gpsDistanceMeters(input.startGpsLat, input.startGpsLng, input.endGpsLat, input.endGpsLng), pointId: req.params.id, chantierId: plan.chantier.id, organizationId: plan.chantier.organizationId, createdById: req.auth!.userId }, ...relations });
     await tx.activityLog.create({ data: { chantierId: plan.chantier.id, userId: req.auth!.userId, action: "BLOCAGE_CREE", description: `${created.titre} · ${created.point.identifiant}` } });
     return created;
   });
@@ -66,6 +75,6 @@ blocagesRouter.post("/:id/photos", uploadPhoto.single("file"), asyncHandler(asyn
   const access = await assertBlocageAccess(req.params.id, req.auth!);
   if (!req.file) throw new HttpError(400, "Aucun fichier reçu");
   const input = photoMetaSchema.parse(req.body);
-  const photo = await prisma.photo.create({ data: { pointId: access.pointId, blocageId: req.params.id, filePath: path.join("photos", req.file.filename), takenAt: new Date(input.takenAt), gpsLat: input.gpsLat ?? null, gpsLng: input.gpsLng ?? null, gpsAccuracy: input.gpsAccuracy ?? null } });
-  res.status(201).json({ photo: { id: photo.id, pointId: photo.pointId, blocageId: photo.blocageId, takenAt: photo.takenAt.toISOString(), gpsLat: photo.gpsLat, gpsLng: photo.gpsLng, gpsAccuracy: photo.gpsAccuracy, createdAt: photo.createdAt.toISOString() } });
+  const photo = await prisma.photo.create({ data: { pointId: access.pointId, blocageId: req.params.id, blocageRole: input.blocageRole, filePath: path.join("photos", req.file.filename), takenAt: new Date(input.takenAt), gpsLat: input.gpsLat ?? null, gpsLng: input.gpsLng ?? null, gpsAccuracy: input.gpsAccuracy ?? null } });
+  res.status(201).json({ photo: { id: photo.id, pointId: photo.pointId, blocageId: photo.blocageId, blocageRole: photo.blocageRole, takenAt: photo.takenAt.toISOString(), gpsLat: photo.gpsLat, gpsLng: photo.gpsLng, gpsAccuracy: photo.gpsAccuracy, createdAt: photo.createdAt.toISOString() } });
 }));

@@ -6,6 +6,9 @@ import { requireAuth } from "../../middleware/auth";
 import { prisma } from "../../config/db";
 import { HttpError } from "../../middleware/errorHandler";
 import { toUserDTO } from "./mapper";
+import bcrypt from "bcryptjs";
+import { hashInvitationToken } from "../invitations/service";
+import { signToken } from "../../middleware/auth";
 
 export const authRouter = Router();
 
@@ -20,6 +23,24 @@ const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(1),
 });
+
+authRouter.get("/invitations/:token", asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { inviteTokenHash: hashInvitationToken(req.params.token) }, include: { organization: { select: { name: true } } } });
+  if (!user || user.invitationAcceptedAt || !user.inviteExpiresAt || user.inviteExpiresAt <= new Date()) throw new HttpError(404, "Invitation invalide ou expirée");
+  res.json({ invitation: { name: user.name, email: user.email, organizationName: user.organization.name, expiresAt: user.inviteExpiresAt.toISOString() } });
+}));
+
+authRouter.post("/invitations/:token/accept", asyncHandler(async (req, res) => {
+  const { password } = z.object({ password: z.string().min(8) }).parse(req.body);
+  const hash = hashInvitationToken(req.params.token);
+  const user = await prisma.user.findUnique({ where: { inviteTokenHash: hash } });
+  if (!user || user.invitationAcceptedAt || !user.inviteExpiresAt || user.inviteExpiresAt <= new Date()) throw new HttpError(404, "Invitation invalide ou expirée");
+  const passwordHash = await bcrypt.hash(password, 10);
+  const result = await prisma.user.updateMany({ where: { id: user.id, inviteTokenHash: hash, invitationAcceptedAt: null }, data: { passwordHash, isActive: true, invitationAcceptedAt: new Date(), inviteTokenHash: null, inviteExpiresAt: null } });
+  if (result.count !== 1) throw new HttpError(409, "Cette invitation a déjà été utilisée");
+  const activated = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+  res.json({ token: signToken({ userId: activated.id }), user: toUserDTO(activated) });
+}));
 
 authRouter.post(
   "/register",

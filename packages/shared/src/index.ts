@@ -27,11 +27,30 @@ export enum BlocagePriorite {
   HAUTE = "HAUTE",
 }
 
+export enum BlocagePhotoRole { DEPART = "DEPART", BLOCAGE = "BLOCAGE" }
+
 export interface OrganizationDTO {
   id: string;
   name: string;
   createdAt: string;
+  updatedAt: string;
+  legalName: string | null;
+  logoUrl: string | null;
+  address: string | null;
+  postalCode: string | null;
+  city: string | null;
+  country: string | null;
+  phone: string | null;
+  contactEmail: string | null;
+  notificationEmail: string | null;
+  responsibleName: string | null;
+  website: string | null;
+  timezone: string;
+  locale: string;
+  notificationPreferences: Record<string, boolean>;
 }
+
+export type UpdateOrganizationInput = Partial<Pick<OrganizationDTO, "name" | "legalName" | "address" | "postalCode" | "city" | "country" | "phone" | "contactEmail" | "notificationEmail" | "responsibleName" | "website" | "timezone" | "locale">>;
 
 export interface UserDTO {
   id: string;
@@ -41,6 +60,7 @@ export interface UserDTO {
   isActive: boolean;
   organizationId: string;
   createdAt: string;
+  invitationPending: boolean;
 }
 
 export enum ChantierStatut {
@@ -122,6 +142,7 @@ export interface PhotoDTO {
   gpsAccuracy: number | null;
   createdAt: string;
   blocageId: string | null;
+  blocageRole: BlocagePhotoRole | null;
 }
 
 export interface BlocageDTO {
@@ -138,6 +159,17 @@ export interface BlocageDTO {
   priorite: BlocagePriorite;
   photos: PhotoDTO[];
   photoCount: number;
+  startX: number | null;
+  startY: number | null;
+  endX: number | null;
+  endY: number | null;
+  startGpsLat: number | null;
+  startGpsLng: number | null;
+  startGpsAccuracy: number | null;
+  endGpsLat: number | null;
+  endGpsLng: number | null;
+  endGpsAccuracy: number | null;
+  distanceMeters: number | null;
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
@@ -150,6 +182,16 @@ export interface CreateBlocageInput {
   titre: string;
   description: string;
   priorite: BlocagePriorite;
+  startX?: number;
+  startY?: number;
+  endX?: number;
+  endY?: number;
+  startGpsLat?: number | null;
+  startGpsLng?: number | null;
+  startGpsAccuracy?: number | null;
+  endGpsLat?: number | null;
+  endGpsLng?: number | null;
+  endGpsAccuracy?: number | null;
 }
 
 export interface UpdateBlocageInput {
@@ -180,6 +222,7 @@ export interface DashboardStatsDTO {
 }
 
 export interface CreatePointInput {
+  id?: string;
   identifiant: string;
   nom?: string;
   type?: string;
@@ -187,6 +230,15 @@ export interface CreatePointInput {
   statut?: PointStatut;
   x: number;
   y: number;
+}
+
+export interface ChantierSyncDTO {
+  chantier: ChantierDTO;
+  plans: PlanDTO[];
+  points: PointDTO[];
+  blocages: BlocageDTO[];
+  photos: PhotoDTO[];
+  syncedAt: string;
 }
 
 export interface UpdatePointInput {
@@ -230,7 +282,6 @@ export interface DocumentDTO {
 export interface CreateUserInput {
   name: string;
   email: string;
-  password: string;
   role: UserRole;
 }
 

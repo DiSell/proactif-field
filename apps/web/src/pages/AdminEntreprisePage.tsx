@@ -1,17 +1,27 @@
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { OrganizationDTO, UpdateOrganizationInput } from "@proactif-field/shared";
+import { useOrganization, useUpdateOrganization, useUploadOrganizationLogo } from "../api/hooks";
+import { apiFetchBlob } from "../api/client";
+
+const emptyForm: UpdateOrganizationInput = { name: "", legalName: null, website: null, address: null, postalCode: null, city: null, country: null, phone: null, contactEmail: null, notificationEmail: null, responsibleName: null, timezone: "Europe/Paris", locale: "fr-FR" };
+
 export default function AdminEntreprisePage() {
-  return (
-    <>
-      <div className="topbar">
-        <h1>Entreprise</h1>
-      </div>
-      <div className="page">
-        <div className="upload-zone">
-          <p>Réglages de l'entreprise à venir.</p>
-          <p style={{ color: "var(--ink-muted)", fontSize: 13 }}>
-            Nom, coordonnées, bibliothèque de termes propre à l'entreprise.
-          </p>
-        </div>
-      </div>
-    </>
-  );
+  const { data: organization, isLoading } = useOrganization(); const update = useUpdateOrganization(); const uploadLogo = useUploadOrganizationLogo();
+  const [form, setForm] = useState<UpdateOrganizationInput>(emptyForm); const [message, setMessage] = useState(""); const fileRef = useRef<HTMLInputElement>(null);
+  useEffect(() => { if (organization) setForm({ name: organization.name, legalName: organization.legalName, website: organization.website, address: organization.address, postalCode: organization.postalCode, city: organization.city, country: organization.country, phone: organization.phone, contactEmail: organization.contactEmail, notificationEmail: organization.notificationEmail, responsibleName: organization.responsibleName, timezone: organization.timezone, locale: organization.locale }); }, [organization]);
+  const set = (key: keyof UpdateOrganizationInput, value: string) => setForm((current) => ({ ...current, [key]: value.trim() === "" && key !== "name" ? null : value }));
+  async function submit(event: FormEvent) { event.preventDefault(); setMessage(""); await update.mutateAsync(form); setMessage("Modifications enregistrées"); }
+  async function selectLogo(event: React.ChangeEvent<HTMLInputElement>) { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; setMessage(""); await uploadLogo.mutateAsync(file); setMessage("Logo enregistré"); }
+  return <><div className="topbar"><h1>Mon entreprise</h1></div><main className="page organization-page">{isLoading ? <p>Chargement…</p> : <form onSubmit={submit}>
+    <section className="organization-heading"><OrganizationLogo organization={organization} /><div><h2>{organization?.name}</h2><p>Identité utilisée dans les invitations et les rapports.</p><input ref={fileRef} hidden type="file" accept="image/png,image/jpeg,image/webp" onChange={selectLogo} /><button type="button" className="btn secondary" onClick={() => fileRef.current?.click()} disabled={uploadLogo.isPending}>{uploadLogo.isPending ? "Envoi…" : "Modifier le logo"}</button><small>PNG, JPG ou WebP · 2 Mo maximum</small></div></section>
+    <OrganizationSection title="Identité"><Field label="Nom commercial *" value={form.name} onChange={(value) => set("name", value)} required /><Field label="Raison sociale" value={form.legalName} onChange={(value) => set("legalName", value)} /><Field label="Site web" value={form.website} onChange={(value) => set("website", value)} type="url" /></OrganizationSection>
+    <OrganizationSection title="Coordonnées"><Field label="Adresse" value={form.address} onChange={(value) => set("address", value)} wide /><Field label="Code postal" value={form.postalCode} onChange={(value) => set("postalCode", value)} /><Field label="Ville" value={form.city} onChange={(value) => set("city", value)} /><Field label="Pays" value={form.country} onChange={(value) => set("country", value)} /><Field label="Téléphone" value={form.phone} onChange={(value) => set("phone", value)} type="tel" /></OrganizationSection>
+    <OrganizationSection title="Contacts"><Field label="E-mail principal *" value={form.contactEmail} onChange={(value) => set("contactEmail", value)} type="email" required /><Field label="E-mail notifications" value={form.notificationEmail} onChange={(value) => set("notificationEmail", value)} type="email" /><Field label="Nom du responsable" value={form.responsibleName} onChange={(value) => set("responsibleName", value)} /></OrganizationSection>
+    <OrganizationSection title="Préférences"><label className="field"><span>Langue</span><select value={form.locale ?? "fr-FR"} onChange={(event) => set("locale", event.target.value)}><option value="fr-FR">Français</option><option value="en-GB">English</option></select></label><label className="field"><span>Fuseau horaire</span><select value={form.timezone ?? "Europe/Paris"} onChange={(event) => set("timezone", event.target.value)}><option value="Europe/Paris">Europe/Paris</option><option value="Europe/London">Europe/London</option><option value="UTC">UTC</option></select></label></OrganizationSection>
+    {message && <div className="organization-success">{message}</div>}{(update.error || uploadLogo.error) && <div className="error-banner">L’enregistrement a échoué. Vérifiez les informations et le format du logo.</div>}<button className="btn organization-save" disabled={update.isPending}>{update.isPending ? "Enregistrement…" : "Enregistrer les modifications"}</button>
+  </form>}</main></>;
 }
+
+function OrganizationSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="organization-section"><h2>{title}</h2><div className="organization-fields">{children}</div></section>; }
+function Field({ label, value, onChange, type = "text", required = false, wide = false }: { label: string; value: string | null | undefined; onChange: (value: string) => void; type?: string; required?: boolean; wide?: boolean }) { return <label className={`field ${wide ? "wide" : ""}`}><span>{label}</span><input type={type} value={value ?? ""} onChange={(event) => onChange(event.target.value)} required={required} /></label>; }
+function OrganizationLogo({ organization }: { organization?: OrganizationDTO }) { const [url, setUrl] = useState<string | null>(null); useEffect(() => { if (!organization?.logoUrl) { setUrl(null); return; } let active = true; let objectUrl = ""; apiFetchBlob(organization.logoUrl).then((blob) => { objectUrl = URL.createObjectURL(blob); if (active) setUrl(objectUrl); }); return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); }; }, [organization?.logoUrl, organization?.updatedAt]); return <div className="organization-logo">{url ? <img src={url} alt={`Logo ${organization?.name ?? "entreprise"}`} /> : <strong>{organization?.name?.trim().charAt(0).toUpperCase() || "E"}</strong>}</div>; }

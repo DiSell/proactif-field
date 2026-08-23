@@ -2,6 +2,7 @@ import { BlocageStatut, ChantierStatut } from "@proactif-field/shared";
 import { Link } from "react-router-dom";
 import { useDashboard } from "../api/hooks";
 import Icon, { IconName } from "../components/Icon";
+import OrganizationIdentity from "../components/OrganizationIdentity";
 
 const STATUS_LABELS: Record<ChantierStatut, string> = {
   [ChantierStatut.PREPARATION]: "Préparation",
@@ -37,7 +38,7 @@ export default function DashboardPage() {
   return (
     <>
       <header className="topbar dashboard-topbar">
-        <div><span className="dashboard-eyebrow">Pilotage</span><h1>Tableau de bord</h1></div>
+        <div><span className="dashboard-eyebrow">Pilotage</span><h1>Tableau de bord</h1><OrganizationIdentity /></div>
         <Link className="dashboard-primary-action" to="/"><Icon name="plus" /> Nouveau chantier</Link>
       </header>
 

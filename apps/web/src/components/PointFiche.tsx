@@ -21,6 +21,9 @@ interface Props {
   onClose: () => void;
   canCapture?: boolean;
   displayMode?: "sheet" | "panel";
+  hidden?: boolean;
+  blockageStart?: { x: number; y: number; gps: { lat: number; lng: number; accuracy: number } | null } | null;
+  onPickBlockageStart?: () => void;
 }
 
 function formatDateTime(iso: string): string {
@@ -32,7 +35,7 @@ interface LightboxState {
   caption: string;
 }
 
-export default function PointFiche({ planId, point, onClose, canCapture = true, displayMode = "sheet" }: Props) {
+export default function PointFiche({ planId, point, onClose, canCapture = true, displayMode = "sheet", hidden = false, blockageStart, onPickBlockageStart }: Props) {
   const updatePoint = useUpdatePoint(planId);
   const deletePoint = useDeletePoint(planId);
   const { data: photos } = usePhotos(point.id);
@@ -112,7 +115,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
   }
 
   return (
-    <div className={`sheet-overlay ${displayMode === "panel" ? "point-panel-overlay" : ""}`} onClick={onClose}>
+    <div className={`sheet-overlay ${displayMode === "panel" ? "point-panel-overlay" : ""}`} style={hidden ? { display: "none" } : undefined} onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-header">
           <div><div className="section-title" style={{ margin: 0 }}>Point {point.identifiant}</div><h2 style={{ margin: 0 }}>{nom || type || "Fiche du point"}</h2></div>
@@ -175,7 +178,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
           </div>
         </div>
 
-        <PointBlocages planId={planId} point={point} />
+        <PointBlocages planId={planId} point={point} blockageStart={blockageStart} onPickBlockageStart={onPickBlockageStart} />
 
         <div className="photo-section point-photo-section">
           <h3 className="photo-section-title">Photos du point ({(photos?.length ?? 0) + pending.length})</h3>

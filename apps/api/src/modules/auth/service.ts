@@ -20,7 +20,7 @@ export async function registerUser(
   const passwordHash = await bcrypt.hash(password, 10);
 
   const user = await prisma.$transaction(async (tx) => {
-    const organization = await tx.organization.create({ data: { name: organizationName } });
+    const organization = await tx.organization.create({ data: { name: organizationName, contactEmail: email } });
     return tx.user.create({
       data: { email, passwordHash, name, role: "ADMIN", organizationId: organization.id },
     });

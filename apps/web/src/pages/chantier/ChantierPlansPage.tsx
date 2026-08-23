@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { PointDTO, UserRole } from "@proactif-field/shared";
-import { useCreatePoint, usePlans, usePoints, useUploadPlan } from "../../api/hooks";
+import { useChantierBlocages, useCreatePoint, usePlans, usePoints, useUploadPlan } from "../../api/hooks";
 import { useAuthStore } from "../../auth/store";
 import PlanViewer from "../../components/PlanViewer";
 import PointFiche from "../../components/PointFiche";
 import MobileFieldHeader from "../../components/MobileFieldHeader";
+import { getCurrentPositionSafe } from "../../utils/geolocation";
 
 // This is the core terrain screen (plan viewer + point creation/selection),
 // unchanged from before the dossier-chantier navigation restructure — only
@@ -22,6 +23,9 @@ export default function ChantierPlansPage() {
 
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<PointDTO | null>(null);
+  const [placingBlockageStart, setPlacingBlockageStart] = useState(false);
+  const [blockageStart, setBlockageStart] = useState<{ x: number; y: number; gps: { lat: number; lng: number; accuracy: number } | null } | null>(null);
+  const { data: chantierBlocages } = useChantierBlocages(chantierId);
 
   useEffect(() => {
     if (plans && plans.length > 0 && !activePlanId) {
@@ -56,6 +60,11 @@ export default function ChantierPlansPage() {
       y,
     });
     setSelectedPoint(point);
+  }
+
+  async function handlePlaceBlockageStart(x: number, y: number) {
+    setBlockageStart({ x, y, gps: await getCurrentPositionSafe() });
+    setPlacingBlockageStart(false);
   }
 
   return (
@@ -98,10 +107,13 @@ export default function ChantierPlansPage() {
               selectedPointId={selectedPoint?.id}
               onPlanChange={(planId) => { setActivePlanId(planId); setSelectedPoint(null); }}
               onAddPlan={isAdmin ? () => fileInputRef.current?.click() : undefined}
+              blocages={(chantierBlocages ?? []).filter((blocage) => (points ?? []).some((point) => point.id === blocage.pointId))}
+              placingBlockageStart={placingBlockageStart}
+              onPlaceBlockageStart={handlePlaceBlockageStart}
             />
           )}
           </div>
-          {selectedPoint && activePlan && <PointFiche planId={activePlan.id} point={selectedPoint} canCapture={isTechnician} displayMode="panel" onClose={() => setSelectedPoint(null)} />}
+          {selectedPoint && activePlan && <PointFiche planId={activePlan.id} point={selectedPoint} canCapture={isTechnician} displayMode="panel" hidden={placingBlockageStart} blockageStart={blockageStart} onPickBlockageStart={() => setPlacingBlockageStart(true)} onClose={() => { setSelectedPoint(null); setBlockageStart(null); }} />}
         </div>
       )}
     </>

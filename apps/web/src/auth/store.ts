@@ -27,6 +27,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ token, user });
   },
   clearAuth: () => {
+    const userId = useAuthStore.getState().user?.id;
+    if (userId) {
+      void import("../offline/db").then(({ clearOfflineData }) => clearOfflineData(userId));
+      void import("../offline/cache").then(({ clearPrivateCache }) => clearPrivateCache(userId));
+    }
     localStorage.removeItem(STORAGE_KEY);
     set({ token: null, user: null });
   },

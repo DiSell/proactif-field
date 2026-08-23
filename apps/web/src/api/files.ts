@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiFetchBlob } from "./client";
+import { useAuthStore } from "../auth/store";
+import { cacheProtectedFile, getCachedFile } from "../offline/cache";
 
 type FileKind = "plans" | "photos" | "reports";
 
@@ -9,7 +11,16 @@ export function getFileObjectUrl(kind: FileKind, id: string): Promise<string> {
   const key = `${kind}/${id}`;
   let cached = blobUrlCache.get(key);
   if (!cached) {
-    cached = apiFetchBlob(`/api/files/${key}`).then((blob) => URL.createObjectURL(blob));
+    cached = (async () => {
+      const userId = useAuthStore.getState().user?.id;
+      if (userId && (kind === "plans" || kind === "photos")) {
+        const local = await getCachedFile(userId, kind, id);
+        if (local) return URL.createObjectURL(local);
+        if (!navigator.onLine) throw new Error("Fichier non disponible hors ligne");
+        return URL.createObjectURL(await cacheProtectedFile(userId, kind, id));
+      }
+      return URL.createObjectURL(await apiFetchBlob(`/api/files/${key}`));
+    })();
     cached.catch(() => blobUrlCache.delete(key));
     blobUrlCache.set(key, cached);
   }

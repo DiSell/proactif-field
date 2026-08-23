@@ -16,6 +16,8 @@ import { termsRouter } from "./modules/terms/routes";
 import { usersRouter } from "./modules/users/routes";
 import { dashboardRouter } from "./modules/dashboard/routes";
 import { blocagesRouter, chantierBlocagesRouter, pointBlocagesRouter } from "./modules/blocages/routes";
+import { pushRouter } from "./modules/push/routes";
+import { organizationRouter } from "./modules/organization/routes";
 
 export function createApp() {
   const app = express();
@@ -47,6 +49,8 @@ export function createApp() {
   app.use("/api/users", usersRouter);
   app.use("/api/dashboard", dashboardRouter);
   app.use("/api/reports", orgReportsRouter);
+  app.use("/api/push", pushRouter);
+  app.use("/api/organization", organizationRouter);
 
   app.use(errorHandler);
 

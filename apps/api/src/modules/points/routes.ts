@@ -11,6 +11,7 @@ import { PointStatut } from "@prisma/client";
 const withCount = { include: { _count: { select: { photos: { where: { blocageId: null } }, blocages: { where: { statut: "OUVERT" } } } } } } as const;
 
 const createSchema = z.object({
+  id: z.string().min(1).optional(),
   identifiant: z.string().min(1),
   nom: z.string().optional(),
   type: z.string().optional(),

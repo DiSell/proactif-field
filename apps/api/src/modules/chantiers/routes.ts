@@ -6,6 +6,12 @@ import { requireAdmin, requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { toChantierDTO } from "./mapper";
+import { toPointDTO } from "../points/mapper";
+import { toBlocageDTO } from "../blocages/mapper";
+import { toPhotoDTO } from "../photos/mapper";
+import { assertChantierAccess } from "../../utils/access";
+import { toPlanDTO } from "../plans/mapper";
+import { notifyChantierAssignment } from "../push/service";
 
 const withAssignments = { include: { assignments: true, responsable: true } } as const;
 
@@ -66,6 +72,23 @@ chantiersRouter.get(
       ...withAssignments,
     });
     res.json({ chantiers: chantiers.map((c) => toChantierDTO(c, auth.userId)) });
+  })
+);
+
+chantiersRouter.get(
+  "/:id/sync",
+  asyncHandler(async (req, res) => {
+    const auth = req.auth!;
+    await assertChantierAccess(req.params.id, auth);
+    const [chantier, plans, points, blocages, photos] = await Promise.all([
+      prisma.chantier.findUnique({ where: { id: req.params.id }, ...withAssignments }),
+      prisma.plan.findMany({ where: { chantierId: req.params.id }, orderBy: { uploadedAt: "asc" } }),
+      prisma.point.findMany({ where: { plan: { chantierId: req.params.id } }, orderBy: { createdAt: "asc" }, include: { _count: { select: { photos: { where: { blocageId: null } }, blocages: { where: { statut: "OUVERT" } } } } } }),
+      prisma.blocage.findMany({ where: { chantierId: req.params.id }, orderBy: { createdAt: "asc" }, include: { point: { select: { identifiant: true } }, createdBy: { select: { name: true } }, resolvedBy: { select: { name: true } }, photos: { orderBy: { takenAt: "asc" } } } }),
+      prisma.photo.findMany({ where: { point: { plan: { chantierId: req.params.id } } }, orderBy: { takenAt: "asc" } }),
+    ]);
+    if (!chantier) throw new HttpError(404, "Chantier introuvable");
+    res.json({ chantier: toChantierDTO(chantier, auth.userId), plans: plans.map(toPlanDTO), points: points.map(toPointDTO), blocages: blocages.map(toBlocageDTO), photos: photos.map(toPhotoDTO), syncedAt: new Date().toISOString() });
   })
 );
 
@@ -184,11 +207,13 @@ chantiersRouter.post(
     if (!user || user.organizationId !== auth.organizationId) {
       throw new HttpError(404, "Utilisateur introuvable");
     }
+    const existingAssignment = await prisma.chantierAssignment.findUnique({ where: { chantierId_userId: { chantierId: chantier.id, userId } } });
     await prisma.chantierAssignment.upsert({
       where: { chantierId_userId: { chantierId: chantier.id, userId } },
       update: {},
       create: { chantierId: chantier.id, userId },
     });
+    if (!existingAssignment && user.role === "TECHNICIEN") void notifyChantierAssignment(userId, chantier).catch((error) => console.error("Notification d'affectation impossible", error));
     const updated = await prisma.chantier.findUnique({ where: { id: chantier.id }, ...withAssignments });
     res.status(201).json({ chantier: toChantierDTO(updated!) });
   })

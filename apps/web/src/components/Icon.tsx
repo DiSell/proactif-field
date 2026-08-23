@@ -2,7 +2,7 @@ export type IconName =
   | "chantier" | "dashboard" | "users" | "building" | "settings" | "report"
   | "menu" | "close" | "back" | "search" | "filter" | "plus" | "camera"
   | "eye" | "eye-off" | "more" | "zoom-in" | "zoom-out" | "locate"
-  | "warning" | "check";
+  | "warning" | "check" | "target";
 
 interface IconProps { name: IconName; size?: number; className?: string }
 
@@ -24,6 +24,7 @@ const paths: Record<IconName, JSX.Element> = {
   "zoom-out": <><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l5 5M5.5 8.5h6"/></>,
   locate: <><circle cx="10" cy="10" r="5"/><path d="M10 1v3M10 16v3M1 10h3M16 10h3"/></>,
   warning: <><path d="M10 2l8 15H2z"/><path d="M10 7v4M10 14h.01"/></>, check: <path d="M3 10l4 4 10-10"/>,
+  target: <><circle cx="10" cy="10" r="7"/><circle cx="10" cy="10" r="2"/><path d="M10 1v3M10 16v3M1 10h3M16 10h3"/></>,
 };
 
 export default function Icon({ name, size = 20, className }: IconProps) {

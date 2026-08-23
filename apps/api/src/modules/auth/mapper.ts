@@ -10,5 +10,6 @@ export function toUserDTO(user: User): UserDTO {
     isActive: user.isActive,
     organizationId: user.organizationId,
     createdAt: user.createdAt.toISOString(),
+    invitationPending: user.invitedAt !== null && user.invitationAcceptedAt === null,
   };
 }

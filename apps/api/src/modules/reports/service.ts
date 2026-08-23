@@ -6,6 +6,7 @@ import { Photo } from "@prisma/client";
 import { prisma } from "../../config/db";
 import { HttpError } from "../../middleware/errorHandler";
 import { ensureUploadSubdir, absolutePathFor } from "../../utils/storage";
+import sharp from "sharp";
 
 function formatDate(date: Date): string {
   return date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
@@ -62,10 +63,29 @@ function drawPhotoGrid(doc: PDFKit.PDFDocument, photos: Photo[]): void {
   doc.y = rowTop + CELL_H + 8;
 }
 
+function drawPlanBlocageOverview(doc: PDFKit.PDFDocument, plan: { filePath: string; fileType: string; points: Array<{ blocages: Array<{ startX: number | null; startY: number | null; endX: number | null; endY: number | null; distanceMeters: number | null; statut: string }> }> }): void {
+  const blocages = plan.points.flatMap((point) => point.blocages).filter((blocage) => blocage.startX != null && blocage.startY != null && blocage.endX != null && blocage.endY != null);
+  if (blocages.length === 0) return;
+  const x = doc.page.margins.left; const y = doc.y; const width = doc.page.width - doc.page.margins.left - doc.page.margins.right; const height = 280;
+  const planPath = absolutePathFor(plan.filePath);
+  if (["PNG", "JPG"].includes(plan.fileType) && fs.existsSync(planPath)) {
+    try { doc.image(planPath, x, y, { fit: [width, height], align: "center", valign: "center" }); } catch { doc.rect(x, y, width, height).fillAndStroke("#f5f5f5", "#b8c1cc"); }
+  } else doc.rect(x, y, width, height).fillAndStroke("#f5f5f5", "#b8c1cc");
+  for (const blocage of blocages) {
+    const ax = x + blocage.startX! * width; const ay = y + blocage.startY! * height; const bx = x + blocage.endX! * width; const by = y + blocage.endY! * height;
+    const color = blocage.statut === "OUVERT" ? "#c92f27" : "#718096";
+    doc.save().lineWidth(2).strokeColor(color).moveTo(ax, ay).lineTo(bx, by).stroke().circle(ax, ay, 5).fillAndStroke("#ffffff", color).lineWidth(3).moveTo(bx - 7, by - 7).lineTo(bx + 7, by + 7).moveTo(bx + 7, by - 7).lineTo(bx - 7, by + 7).stroke();
+    if (blocage.distanceMeters != null) doc.fontSize(8).fillColor(color).text(`${blocage.distanceMeters.toFixed(1)} m`, (ax + bx) / 2 - 24, (ay + by) / 2 - 12, { width: 48, align: "center" });
+    doc.restore();
+  }
+  doc.fillColor("black"); doc.y = y + height + 12;
+}
+
 export async function generateChantierReport(chantierId: string, generatedById: string) {
   const chantier = await prisma.chantier.findUnique({
     where: { id: chantierId },
     include: {
+      organization: true,
       plans: {
         include: {
           points: {
@@ -89,7 +109,14 @@ export async function generateChantierReport(chantierId: string, generatedById: 
   const stream = fs.createWriteStream(absPath);
   doc.pipe(stream);
 
-  doc.fontSize(20).text(chantier.name, { underline: true });
+  if (chantier.organization.logoPath) {
+    try { const logo = await sharp(absolutePathFor(chantier.organization.logoPath)).resize({ width: 150, height: 70, fit: "inside" }).png().toBuffer(); doc.image(logo, { fit: [150, 70] }); doc.moveDown(0.5); } catch { /* Le rapport reste générable si un ancien logo est illisible. */ }
+  }
+  doc.fontSize(13).text(chantier.organization.name);
+  const organizationAddress = [chantier.organization.address, [chantier.organization.postalCode, chantier.organization.city].filter(Boolean).join(" "), chantier.organization.country].filter(Boolean).join(" · ");
+  if (organizationAddress) doc.fontSize(9).fillColor("gray").text(organizationAddress);
+  if (chantier.organization.phone || chantier.organization.contactEmail) doc.fontSize(9).fillColor("gray").text([chantier.organization.phone, chantier.organization.contactEmail].filter(Boolean).join(" · "));
+  doc.moveDown().fillColor("black").fontSize(20).text(chantier.name, { underline: true });
   if (chantier.address) doc.fontSize(11).text(chantier.address);
   if (chantier.description) doc.fontSize(11).text(chantier.description);
   doc.moveDown();
@@ -115,6 +142,7 @@ export async function generateChantierReport(chantierId: string, generatedById: 
     doc.addPage();
     doc.fontSize(16).text(`Plan : ${plan.fileName}`, { underline: true });
     doc.moveDown();
+    drawPlanBlocageOverview(doc, plan);
 
     if (plan.points.length === 0) {
       doc.fontSize(11).fillColor("gray").text("Aucun point sur ce plan.");
@@ -145,10 +173,11 @@ export async function generateChantierReport(chantierId: string, generatedById: 
         for (const blocage of point.blocages) {
           doc.fontSize(10).fillColor("black").text(`${blocage.titre} · ${blocage.statut} · Priorité ${blocage.priorite}`);
           doc.fontSize(9).text(`${blocage.description} · Signalé le ${formatDate(blocage.createdAt)}`);
-          if (blocage.photos.length > 0) {
-            doc.fontSize(8).fillColor("gray").text("Photos du blocage :");
-            drawPhotoGrid(doc, blocage.photos);
-          }
+          const startPhotos = blocage.photos.filter((photo) => photo.blocageRole === "DEPART");
+          const blockagePhotos = blocage.photos.filter((photo) => photo.blocageRole !== "DEPART");
+          if (blocage.distanceMeters != null) doc.fontSize(9).fillColor("#9b2c2c").text(`Distance GPS A → B : ${blocage.distanceMeters.toFixed(1)} m`);
+          if (startPhotos.length > 0) { doc.fontSize(8).fillColor("gray").text("Photos du départ A :"); drawPhotoGrid(doc, startPhotos); }
+          if (blockagePhotos.length > 0) { doc.fontSize(8).fillColor("gray").text("Photos du point bloquant B :"); drawPhotoGrid(doc, blockagePhotos); }
         }
       }
       doc.fillColor("black");

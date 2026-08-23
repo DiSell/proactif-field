@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { PlanDTO, PointDTO } from "@proactif-field/shared";
+import { BlocageDTO, BlocageStatut, PlanDTO, PointDTO } from "@proactif-field/shared";
 import { apiFetchArrayBuffer } from "../api/client";
 import { useFileObjectUrl } from "../api/files";
 import PointMarker from "./PointMarker";
@@ -20,9 +20,12 @@ interface Props {
   selectedPointId?: string | null;
   onPlanChange?: (planId: string) => void;
   onAddPlan?: () => void;
+  blocages?: BlocageDTO[];
+  placingBlockageStart?: boolean;
+  onPlaceBlockageStart?: (x: number, y: number) => void;
 }
 
-export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint, canCreatePoint = true, plans = [plan], selectedPointId, onPlanChange = () => undefined, onAddPlan }: Props) {
+export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint, canCreatePoint = true, plans = [plan], selectedPointId, onPlanChange = () => undefined, onAddPlan, blocages = [], placingBlockageStart = false, onPlaceBlockageStart }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const [pointsVisible, setPointsVisible] = useState(true);
@@ -40,12 +43,13 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
   }
 
   function handleContentClick(e: React.MouseEvent<HTMLDivElement>) {
-    if (!canCreatePoint) return;
     if ((e.target as HTMLElement).closest(".point-marker")) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
+    if (placingBlockageStart) { onPlaceBlockageStart?.(x, y); return; }
+    if (!canCreatePoint) return;
     onCreatePoint(x, y);
   }
 
@@ -60,9 +64,19 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
             ) : (
               <PlanImage planId={plan.id} />
             )}
+            <svg className="blocage-traces" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              {blocages.filter((blocage) => blocage.startX != null && blocage.startY != null && blocage.endX != null && blocage.endY != null).map((blocage) => <g key={blocage.id} className={blocage.statut === BlocageStatut.OUVERT ? "open" : "resolved"}>
+                <line x1={blocage.startX! * 100} y1={blocage.startY! * 100} x2={blocage.endX! * 100} y2={blocage.endY! * 100} />
+                <circle cx={blocage.startX! * 100} cy={blocage.startY! * 100} r="1.5" />
+                <line className="cross" x1={blocage.endX! * 100 - 1.8} y1={blocage.endY! * 100 - 1.8} x2={blocage.endX! * 100 + 1.8} y2={blocage.endY! * 100 + 1.8} />
+                <line className="cross" x1={blocage.endX! * 100 + 1.8} y1={blocage.endY! * 100 - 1.8} x2={blocage.endX! * 100 - 1.8} y2={blocage.endY! * 100 + 1.8} />
+              </g>)}
+            </svg>
+            {blocages.filter((blocage) => blocage.distanceMeters != null && blocage.startX != null && blocage.startY != null && blocage.endX != null && blocage.endY != null).map((blocage) => <span key={`distance-${blocage.id}`} className="blocage-distance" style={{ left: `${((blocage.startX! + blocage.endX!) / 2) * 100}%`, top: `${((blocage.startY! + blocage.endY!) / 2) * 100}%` }}>{blocage.distanceMeters!.toFixed(1)} m</span>)}
             {pointsVisible && points.map((point) => (
-              <PointMarker key={point.id} point={point} selected={point.id === selectedPointId} onClick={() => onSelectPoint(point)} />
+              <PointMarker key={point.id} point={point} selected={point.id === selectedPointId} onClick={() => placingBlockageStart ? onPlaceBlockageStart?.(point.x, point.y) : onSelectPoint(point)} />
             ))}
+            {placingBlockageStart && <div className="blocage-placement-hint">Touchez le départ A sur le plan</div>}
           </div>
         </TransformComponent>
       </TransformWrapper>

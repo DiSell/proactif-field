@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { UserRole } from "@proactif-field/shared";
 import { useAuthStore } from "../auth/store";
 import Icon, { IconName } from "./Icon";
+import { enablePushNotifications, pushIsEnabled, pushSupported } from "../pushNotifications";
 
 interface NavItem {
   to: string;
@@ -17,6 +18,8 @@ interface NavItem {
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushMessage, setPushMessage] = useState("");
   const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
@@ -54,6 +57,19 @@ export default function AppLayout() {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [mobileOpen]);
+
+  useEffect(() => { if (isTechnician && pushSupported()) void pushIsEnabled().then(setPushEnabled); }, [isTechnician]);
+
+  async function activatePush() {
+    setPushMessage("Activation…");
+    try {
+      const result = await enablePushNotifications();
+      setPushEnabled(result === "enabled");
+      setPushMessage(result === "enabled" ? "Notifications activées" : result === "denied" ? "Autorisation refusée" : "Notifications non configurées");
+    } catch {
+      setPushMessage("Activation impossible");
+    }
+  }
 
   return (
     <div className={`app-layout ${isAdmin ? "admin-layout" : "technician-layout"} ${isTerrainRoute ? "terrain-layout" : ""}`}>
@@ -109,7 +125,7 @@ export default function AppLayout() {
             <span className="account-copy"><strong>{user?.name ?? "Utilisateur"}</strong><small>{isAdmin ? "Responsable / Admin" : "Technicien terrain"}</small></span>
             <Icon name="more" />
           </button>
-          {accountOpen && <div className="account-menu"><span>{user?.email}</span><button onClick={() => clearAuth()}>Se déconnecter</button></div>}
+          {accountOpen && <div className="account-menu"><span>{user?.email}</span>{isTechnician && !pushEnabled && <button onClick={() => void activatePush()}>Activer les notifications</button>}{isTechnician && pushMessage && <small>{pushMessage}</small>}<button onClick={() => clearAuth()}>Se déconnecter</button></div>}
         </div>
       </aside>
 

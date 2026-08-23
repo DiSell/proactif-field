@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { UserRole } from "@proactif-field/shared";
 import { useAuthStore } from "./auth/store";
-import { startSyncLoop, onSyncChange, getLastSyncError } from "./offline/syncManager";
-import { getPendingPhotos } from "./offline/db";
+import { startSyncLoop, onSyncChange, getLastSyncError, isSyncing, trySync } from "./offline/syncManager";
+import { getOperations, getPendingPhotos } from "./offline/db";
 import AppLayout from "./components/AppLayout";
 import ChantierLayout from "./components/ChantierLayout";
 import LoginPage from "./pages/LoginPage";
@@ -22,6 +22,7 @@ import AdminUsersPage from "./pages/AdminUsersPage";
 import AdminEntreprisePage from "./pages/AdminEntreprisePage";
 import AdminParametresPage from "./pages/AdminParametresPage";
 import ReportsPage from "./pages/ReportsPage";
+import ActivateAccountPage from "./pages/ActivateAccountPage";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
@@ -40,20 +41,27 @@ function RequireAdmin({ children }: { children: JSX.Element }) {
 function SyncBanner() {
   const [pendingCount, setPendingCount] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [online, setOnline] = useState(navigator.onLine);
+  const userId = useAuthStore((state) => state.user?.id);
 
   useEffect(() => {
     const refresh = () => {
-      getPendingPhotos().then((list) => setPendingCount(list.length));
+      Promise.all([getPendingPhotos(), getOperations(userId)]).then(([photos, operations]) => setPendingCount(photos.length + operations.length));
       setLastError(getLastSyncError());
+      setOnline(navigator.onLine);
     };
     refresh();
-    return onSyncChange(refresh);
-  }, []);
+    const unsubscribe = onSyncChange(refresh);
+    window.addEventListener("online", refresh);
+    window.addEventListener("offline", refresh);
+    return () => { unsubscribe(); window.removeEventListener("online", refresh); window.removeEventListener("offline", refresh); };
+  }, [userId]);
 
-  if (pendingCount === 0) return null;
+  if (online && pendingCount === 0 && !lastError) return null;
   return (
     <div className="sync-banner">
-      {pendingCount} photo{pendingCount > 1 ? "s" : ""} en attente de synchronisation…
+      <span>{online ? (isSyncing() ? "Synchronisation…" : "En ligne") : "Mode hors ligne"}{pendingCount > 0 ? ` · ${pendingCount} opération${pendingCount > 1 ? "s" : ""} en attente` : ""}</span>
+      {online && pendingCount > 0 && <button className="btn secondary" onClick={() => void trySync()}>Synchroniser maintenant</button>}
       {lastError && <div className="sync-banner-error">Dernière erreur : {lastError}</div>}
     </div>
   );
@@ -67,6 +75,7 @@ export default function App() {
       <SyncBanner />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/activate/:token" element={<ActivateAccountPage />} />
         <Route
           element={
             <RequireAuth>

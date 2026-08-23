@@ -7,6 +7,8 @@ import { requireAdmin, requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { toUserDTO } from "../auth/mapper";
+import crypto from "crypto";
+import { createInvitationToken, invitationEmailEnabled, sendTechnicianInvitation } from "../invitations/service";
 
 export const usersRouter = Router();
 usersRouter.use(requireAuth, requireAdmin);
@@ -14,7 +16,6 @@ usersRouter.use(requireAuth, requireAdmin);
 const createSchema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  password: z.string().min(8),
   role: z.nativeEnum(UserRole),
 });
 
@@ -35,10 +36,6 @@ usersRouter.get(
   })
 );
 
-// No email-invitation flow yet: an ADMIN creates the account directly with
-// a password they set, and communicates it to the technician out of band.
-// Architecture (this endpoint, isActive flag) is compatible with adding
-// invite-by-email later without breaking changes.
 usersRouter.post(
   "/",
   asyncHandler(async (req, res) => {
@@ -47,19 +44,33 @@ usersRouter.post(
     if (existing) {
       throw new HttpError(409, "Un compte existe déjà avec cet email");
     }
-    const passwordHash = await bcrypt.hash(input.password, 10);
+    if (!invitationEmailEnabled) throw new HttpError(503, "Configurez l'envoi d'e-mails avant d'inviter un utilisateur");
+    const invitation = createInvitationToken();
+    const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("base64url"), 10);
     const user = await prisma.user.create({
       data: {
         name: input.name,
         email: input.email,
-        passwordHash,
+        passwordHash, isActive: false, inviteTokenHash: invitation.hash, inviteExpiresAt: invitation.expiresAt, invitedAt: new Date(), invitationAcceptedAt: null,
         role: input.role,
         organizationId: req.auth!.organizationId,
       },
     });
+    const organization = await prisma.organization.findUnique({ where: { id: req.auth!.organizationId }, select: { name: true, contactEmail: true } });
+    await sendTechnicianInvitation({ email: user.email, name: user.name, role: user.role, organizationName: organization?.name ?? "Votre entreprise", contactEmail: organization?.contactEmail, token: invitation.raw });
     res.status(201).json({ user: toUserDTO(user) });
   })
 );
+
+usersRouter.post("/:id/resend-invitation", asyncHandler(async (req, res) => {
+  const user = await prisma.user.findUnique({ where: { id: req.params.id }, include: { organization: { select: { name: true, contactEmail: true } } } });
+  if (!user || user.organizationId !== req.auth!.organizationId) throw new HttpError(404, "Utilisateur introuvable");
+  if (user.invitationAcceptedAt) throw new HttpError(400, "Ce compte est déjà activé");
+  const invitation = createInvitationToken();
+  await prisma.user.update({ where: { id: user.id }, data: { inviteTokenHash: invitation.hash, inviteExpiresAt: invitation.expiresAt, invitedAt: new Date() } });
+  await sendTechnicianInvitation({ email: user.email, name: user.name, role: user.role, organizationName: user.organization.name, contactEmail: user.organization.contactEmail, token: invitation.raw });
+  res.status(204).send();
+}));
 
 usersRouter.patch(
   "/:id",

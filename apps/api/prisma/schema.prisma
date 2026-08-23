@@ -49,10 +49,30 @@ enum BlocagePriorite {
   HAUTE
 }
 
+enum BlocagePhotoRole {
+  DEPART
+  BLOCAGE
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  legalName String?
+  logoPath String?
+  address String?
+  postalCode String?
+  city String?
+  country String?
+  phone String?
+  contactEmail String?
+  notificationEmail String?
+  responsibleName String?
+  website String?
+  timezone String @default("Europe/Paris")
+  locale String @default("fr-FR")
+  notificationPreferences Json @default("{}")
 
   users      User[]
   chantiers  Chantier[]
@@ -70,6 +90,10 @@ model User {
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id])
   createdAt      DateTime     @default(now())
+  inviteTokenHash String?     @unique
+  inviteExpiresAt DateTime?
+  invitedAt       DateTime?
+  invitationAcceptedAt DateTime?
 
   chantiers            Chantier[]           @relation("ChantierCreatedBy")
   chantiersResponsable Chantier[]           @relation("ChantierResponsable")
@@ -79,6 +103,20 @@ model User {
   blocagesCreated      Blocage[]            @relation("BlocageCreatedBy")
   blocagesResolved     Blocage[]            @relation("BlocageResolvedBy")
   activityLogs         ActivityLog[]
+  pushSubscriptions    PushSubscription[]
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model Chantier {
@@ -174,6 +212,7 @@ model Photo {
   // attached to its point first.
   blocageId   String?
   blocage     Blocage? @relation(fields: [blocageId], references: [id], onDelete: SetNull)
+  blocageRole BlocagePhotoRole?
   filePath    String
   takenAt     DateTime
   gpsLat      Float?
@@ -232,6 +271,17 @@ model Blocage {
   description    String
   statut         BlocageStatut    @default(OUVERT)
   priorite       BlocagePriorite  @default(NORMALE)
+  startX          Float?
+  startY          Float?
+  endX            Float?
+  endY            Float?
+  startGpsLat     Float?
+  startGpsLng     Float?
+  startGpsAccuracy Float?
+  endGpsLat       Float?
+  endGpsLng       Float?
+  endGpsAccuracy  Float?
+  distanceMeters Float?
   resolvedAt     DateTime?
   resolvedById   String?
   resolvedBy     User?            @relation("BlocageResolvedBy", fields: [resolvedById], references: [id])
