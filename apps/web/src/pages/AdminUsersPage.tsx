@@ -82,7 +82,7 @@ export default function AdminUsersPage() {
           <div key={u.id} className="card user-card">
             <div>
               <h3>
-                {u.name} {u.id === currentUser?.id && <span style={{ color: "#94a3b8" }}>(vous)</span>}
+                {u.name} {u.id === currentUser?.id && <span style={{ color: "var(--ink-muted)" }}>(vous)</span>}
               </h3>
               <p>{u.email}</p>
             </div>

@@ -25,7 +25,7 @@ pointPhotosRouter.get(
   asyncHandler(async (req, res) => {
     await assertPointAccess(req.params.id, req.auth!);
     const photos = await prisma.photo.findMany({
-      where: { pointId: req.params.id },
+      where: { pointId: req.params.id, blocageId: null },
       orderBy: { takenAt: "asc" },
     });
     res.json({ photos: photos.map(toPhotoDTO) });

@@ -7,7 +7,7 @@ export default function AdminEntreprisePage() {
       <div className="page">
         <div className="upload-zone">
           <p>Réglages de l'entreprise à venir.</p>
-          <p style={{ color: "#94a3b8", fontSize: 13 }}>
+          <p style={{ color: "var(--ink-muted)", fontSize: 13 }}>
             Nom, coordonnées, bibliothèque de termes propre à l'entreprise.
           </p>
         </div>

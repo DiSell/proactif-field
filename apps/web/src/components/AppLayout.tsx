@@ -1,12 +1,13 @@
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { UserRole } from "@proactif-field/shared";
 import { useAuthStore } from "../auth/store";
+import Icon, { IconName } from "./Icon";
 
 interface NavItem {
   to: string;
   label: string;
-  icon: string;
+  icon: IconName;
   end?: boolean;
 }
 
@@ -15,42 +16,64 @@ interface NavItem {
 // maximum d'espace pour le plan" requirement.
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const isAdmin = user?.role === UserRole.ADMIN;
+  const isTechnician = user?.role === UserRole.TECHNICIEN;
+  const isTerrainRoute = /^\/chantiers\/[^/]+\/plans/.test(location.pathname);
 
-  const mainItems: NavItem[] = [{ to: "/", label: "Chantiers", icon: "🏗️", end: true }];
-  if (isAdmin) mainItems.unshift({ to: "/dashboard", label: "Tableau de bord", icon: "📊" });
+  const mainItems: NavItem[] = [{ to: "/", label: isTechnician ? "Mes chantiers" : "Chantiers", icon: "chantier", end: true }];
+  if (isAdmin) mainItems.unshift({ to: "/dashboard", label: "Tableau de bord", icon: "dashboard" });
 
   const adminItems: NavItem[] = [
-    { to: "/admin/users", label: "Utilisateurs", icon: "👥" },
-    { to: "/admin/entreprise", label: "Entreprise", icon: "🏢" },
-    { to: "/admin/parametres", label: "Paramètres", icon: "⚙️" },
-    { to: "/reports", label: "Rapports", icon: "📄" },
+    { to: "/admin/users", label: "Utilisateurs", icon: "users" },
+    { to: "/admin/entreprise", label: "Entreprise", icon: "building" },
+    { to: "/admin/parametres", label: "Paramètres", icon: "settings" },
+    { to: "/reports", label: "Rapports", icon: "report" },
   ];
 
   function closeMobile() {
     setMobileOpen(false);
+    setAccountOpen(false);
   }
 
+  useEffect(() => {
+    closeMobile();
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => event.key === "Escape" && closeMobile();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [mobileOpen]);
+
   return (
-    <div className="app-layout">
-      <button className="sidebar-toggle" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu">
-        ☰
+    <div className={`app-layout ${isAdmin ? "admin-layout" : "technician-layout"} ${isTerrainRoute ? "terrain-layout" : ""}`}>
+      <button className="sidebar-toggle" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu" aria-expanded={mobileOpen}>
+        <Icon name="menu" />
       </button>
 
-      {mobileOpen && <div className="sidebar-backdrop" onClick={closeMobile} />}
+      {mobileOpen && <div className="sidebar-backdrop" onClick={closeMobile} aria-hidden="true" />}
 
-      <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
+      <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`} aria-label={isAdmin ? "Navigation principale" : "Espace technicien"}>
         <div className="sidebar-header">
           <img src="/logo-icon.svg" alt="" width={28} height={28} />
-          <span>Proactif Field</span>
+          <div className="sidebar-brand"><span>Proactif</span><strong>Field</strong></div>
           <button className="sidebar-close" onClick={closeMobile} aria-label="Fermer le menu">
-            ✕
+            <Icon name="close" />
           </button>
         </div>
 
-        <nav className="sidebar-nav">
+        <nav className="sidebar-nav" aria-label="Navigation">
+          {isTechnician && <div className="sidebar-context"><span>Espace terrain</span><strong>Mes interventions</strong></div>}
           {mainItems.map((item) => (
             <NavLink
               key={item.to}
@@ -59,7 +82,7 @@ export default function AppLayout() {
               onClick={closeMobile}
               className={({ isActive }) => `sidebar-link ${isActive ? "sidebar-link-active" : ""}`}
             >
-              <span>{item.icon}</span> {item.label}
+              <Icon name={item.icon} /> {item.label}
             </NavLink>
           ))}
 
@@ -73,16 +96,21 @@ export default function AppLayout() {
                   onClick={closeMobile}
                   className={({ isActive }) => `sidebar-link ${isActive ? "sidebar-link-active" : ""}`}
                 >
-                  <span>{item.icon}</span> {item.label}
+                  <Icon name={item.icon} /> {item.label}
                 </NavLink>
               ))}
             </>
           )}
         </nav>
 
-        <button className="btn secondary sidebar-logout" onClick={() => clearAuth()}>
-          {user?.name ?? "Déconnexion"} · Quitter
-        </button>
+        <div className="sidebar-account">
+          <button className="account-trigger" onClick={() => setAccountOpen((open) => !open)} aria-expanded={accountOpen}>
+            <span className="account-avatar">{user?.name?.trim().charAt(0).toUpperCase() || "U"}</span>
+            <span className="account-copy"><strong>{user?.name ?? "Utilisateur"}</strong><small>{isAdmin ? "Responsable / Admin" : "Technicien terrain"}</small></span>
+            <Icon name="more" />
+          </button>
+          {accountOpen && <div className="account-menu"><span>{user?.email}</span><button onClick={() => clearAuth()}>Se déconnecter</button></div>}
+        </div>
       </aside>
 
       <div className="app-main">

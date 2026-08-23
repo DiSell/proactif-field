@@ -5,6 +5,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { toChantierDTO } from "../chantiers/mapper";
 import { toReportDTO } from "../reports/mapper";
 import { DashboardStatsDTO } from "@proactif-field/shared";
+import { toBlocageDTO } from "../blocages/mapper";
 
 // Company-wide overview — ADMIN only (this is the "espace entreprise" side,
 // distinct from the terrain/technician view).
@@ -16,7 +17,7 @@ dashboardRouter.get(
   asyncHandler(async (req, res) => {
     const organizationId = req.auth!.organizationId;
 
-    const [chantierCount, pointCount, pointCompleteCount, recentChantiers, recentReports] = await Promise.all([
+    const [chantierCount, pointCount, pointCompleteCount, recentChantiers, recentReports, openBlocageCount, recentBlocages] = await Promise.all([
       prisma.chantier.count({ where: { organizationId } }),
       prisma.point.count({ where: { plan: { chantier: { organizationId } } } }),
       prisma.point.count({ where: { plan: { chantier: { organizationId } }, statut: "VERT" } }),
@@ -32,6 +33,8 @@ dashboardRouter.get(
         take: 5,
         include: { chantier: true, generatedBy: true },
       }),
+      prisma.blocage.count({ where: { organizationId, statut: "OUVERT" } }),
+      prisma.blocage.findMany({ where: { organizationId }, orderBy: { createdAt: "desc" }, take: 5, include: { point: { select: { identifiant: true } }, createdBy: { select: { name: true } }, resolvedBy: { select: { name: true } }, photos: { orderBy: { takenAt: "asc" } } } }),
     ]);
 
     const stats: DashboardStatsDTO = {
@@ -41,6 +44,8 @@ dashboardRouter.get(
       progressPercent: pointCount === 0 ? 0 : Math.round((pointCompleteCount / pointCount) * 100),
       recentChantiers: recentChantiers.map((c) => toChantierDTO(c)),
       recentReports: recentReports.map(toReportDTO),
+      openBlocageCount,
+      recentBlocages: recentBlocages.map(toBlocageDTO),
     };
 
     res.json(stats);

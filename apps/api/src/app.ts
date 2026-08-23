@@ -15,6 +15,7 @@ import { filesRouter } from "./modules/files/routes";
 import { termsRouter } from "./modules/terms/routes";
 import { usersRouter } from "./modules/users/routes";
 import { dashboardRouter } from "./modules/dashboard/routes";
+import { blocagesRouter, chantierBlocagesRouter, pointBlocagesRouter } from "./modules/blocages/routes";
 
 export function createApp() {
   const app = express();
@@ -31,12 +32,15 @@ export function createApp() {
   app.use("/api/chantiers/:id/plans", chantierPlansRouter);
   app.use("/api/chantiers/:id/reports", chantierReportsRouter);
   app.use("/api/chantiers/:id/documents", chantierDocumentsRouter);
+  app.use("/api/chantiers/:id/blocages", chantierBlocagesRouter);
   app.use("/api/documents", documentsRouter);
   app.use("/api/plans", plansRouter);
   app.use("/api/plans/:id/points", planPointsRouter);
   app.use("/api/chantiers/:id/points", chantierPointsRouter);
   app.use("/api/points", pointsRouter);
   app.use("/api/points/:id/photos", pointPhotosRouter);
+  app.use("/api/points/:id/blocages", pointBlocagesRouter);
+  app.use("/api/blocages", blocagesRouter);
   app.use("/api/photos", photosRouter);
   app.use("/api/files", filesRouter);
   app.use("/api/terms", termsRouter);

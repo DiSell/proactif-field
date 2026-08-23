@@ -12,12 +12,15 @@ import {
 import { onSyncChange, trySync } from "../offline/syncManager";
 import { getCurrentPositionSafe } from "../utils/geolocation";
 import AutocompleteInput from "./AutocompleteInput";
-import StatusBadge from "./StatusBadge";
+import Icon from "./Icon";
+import PointBlocages from "./PointBlocages";
 
 interface Props {
   planId: string;
   point: PointDTO;
   onClose: () => void;
+  canCapture?: boolean;
+  displayMode?: "sheet" | "panel";
 }
 
 function formatDateTime(iso: string): string {
@@ -29,7 +32,7 @@ interface LightboxState {
   caption: string;
 }
 
-export default function PointFiche({ planId, point, onClose }: Props) {
+export default function PointFiche({ planId, point, onClose, canCapture = true, displayMode = "sheet" }: Props) {
   const updatePoint = useUpdatePoint(planId);
   const deletePoint = useDeletePoint(planId);
   const { data: photos } = usePhotos(point.id);
@@ -109,16 +112,16 @@ export default function PointFiche({ planId, point, onClose }: Props) {
   }
 
   return (
-    <div className="sheet-overlay" onClick={onClose}>
+    <div className={`sheet-overlay ${displayMode === "panel" ? "point-panel-overlay" : ""}`} onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-header">
-          <h2 style={{ margin: 0 }}>Fiche du point</h2>
+          <div><div className="section-title" style={{ margin: 0 }}>Point {point.identifiant}</div><h2 style={{ margin: 0 }}>{nom || type || "Fiche du point"}</h2></div>
           <button className="btn secondary" onClick={onClose}>
-            Fermer
+            <Icon name="close" /> Fermer
           </button>
         </div>
 
-        <div className="field">
+        <div className="field point-field-identifier">
           <label>Identifiant</label>
           <AutocompleteInput
             field="point.identifiant"
@@ -127,7 +130,7 @@ export default function PointFiche({ planId, point, onClose }: Props) {
             onCommit={(v) => saveField({ identifiant: v })}
           />
         </div>
-        <div className="field">
+        <div className="field point-field-type">
           <label>Type (regard, chambre, vanne, poteau…)</label>
           <AutocompleteInput
             field="point.type"
@@ -137,7 +140,7 @@ export default function PointFiche({ planId, point, onClose }: Props) {
             placeholder="ex: regard"
           />
         </div>
-        <div className="field">
+        <div className="field point-field-name">
           <label>Nom (optionnel)</label>
           <AutocompleteInput
             field="point.nom"
@@ -146,7 +149,7 @@ export default function PointFiche({ planId, point, onClose }: Props) {
             onCommit={(v) => saveField({ nom: v })}
           />
         </div>
-        <div className="field">
+        <div className="field point-field-comment">
           <label>Commentaire</label>
           <AutocompleteInput
             field="point.commentaire"
@@ -157,26 +160,24 @@ export default function PointFiche({ planId, point, onClose }: Props) {
             rows={3}
           />
         </div>
-        <div className="field">
+        <div className="field point-field-status">
           <label>Statut</label>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="status-selector">
             {(Object.values(PointStatut) as PointStatut[]).map((s) => (
               <button
                 key={s}
-                className="btn secondary"
-                style={{
-                  flex: 1,
-                  outline: point.statut === s ? "2px solid white" : "none",
-                }}
+                className={`btn secondary ${s} ${point.statut === s ? "active" : ""}`}
                 onClick={() => changeStatut(s)}
               >
-                <StatusBadge statut={s} />
+                <span><span className={`status-dot ${s}`} /> {s === PointStatut.GRIS ? "À faire" : s === PointStatut.ORANGE ? "En cours" : "Terminé"}</span>
               </button>
             ))}
           </div>
         </div>
 
-        <div className="photo-section">
+        <PointBlocages planId={planId} point={point} />
+
+        <div className="photo-section point-photo-section">
           <h3 className="photo-section-title">Photos du point ({(photos?.length ?? 0) + pending.length})</h3>
 
           {(photos?.length ?? 0) + pending.length === 0 ? (
@@ -210,16 +211,16 @@ export default function PointFiche({ planId, point, onClose }: Props) {
             style={{ display: "none" }}
             onChange={handleFileSelected}
           />
-          <button
+          {canCapture && <button
             className="btn block photo-capture-btn"
             disabled={capturing}
             onClick={() => fileInputRef.current?.click()}
           >
-            {capturing ? "Enregistrement…" : "📷 Prendre une photo"}
-          </button>
+            {!capturing && <Icon name="camera" />}{capturing ? "Enregistrement…" : "Prendre une photo"}
+          </button>}
         </div>
 
-        <button className="btn danger block" onClick={handleDeletePoint} style={{ marginTop: 16 }}>
+        <button className="btn danger block point-delete-button" onClick={handleDeletePoint} style={{ marginTop: 16 }}>
           Supprimer ce point
         </button>
       </div>
@@ -233,7 +234,7 @@ function PhotoLightbox({ state, onClose }: { state: LightboxState; onClose: () =
   return (
     <div className="lightbox-overlay" onClick={onClose}>
       <button className="lightbox-close" onClick={onClose} aria-label="Fermer">
-        ✕
+        <Icon name="close" />
       </button>
       <img src={state.url} alt="" onClick={(e) => e.stopPropagation()} />
       <div className="lightbox-caption">{state.caption}</div>
@@ -259,7 +260,7 @@ function PhotoThumb({
           style={{
             aspectRatio: 1,
             width: "100%",
-            background: "#334155",
+            background: "var(--paper-2)",
             borderRadius: 8,
             border: "none",
             color: "#fca5a5",
@@ -271,7 +272,7 @@ function PhotoThumb({
       ) : url ? (
         <img src={url} alt="" onClick={() => onOpen(url)} style={{ cursor: "pointer" }} />
       ) : (
-        <div style={{ aspectRatio: 1, background: "#334155", borderRadius: 8 }} />
+        <div style={{ aspectRatio: 1, background: "var(--paper-2)" }} />
       )}
       <div className="photo-meta">{formatDateTime(takenAt)}</div>
     </div>
@@ -331,7 +332,7 @@ function PendingThumb({
             padding: 0,
           }}
         >
-          ✕
+          <Icon name="close" size={14} />
         </button>
       </div>
       <div className="photo-meta">{formatDateTime(photo.takenAt)}</div>

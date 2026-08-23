@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChantierDTO,
+  BlocageDTO,
+  BlocageStatut,
+  CreateBlocageInput,
+  UpdateBlocageInput,
   CreatePointInput,
   CreateUserInput,
   DashboardStatsDTO,
@@ -105,6 +109,29 @@ export function useDeletePoint(planId: string | undefined) {
     mutationFn: (id: string) => apiDelete(`/api/points/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["plans", planId, "points"] }),
   });
+}
+
+export function usePointBlocages(pointId: string | undefined) {
+  return useQuery({ queryKey: ["points", pointId, "blocages"], queryFn: () => apiGet<{ blocages: BlocageDTO[] }>(`/api/points/${pointId}/blocages`).then((r) => r.blocages), enabled: !!pointId });
+}
+
+export function useChantierBlocages(chantierId: string | undefined, statut?: BlocageStatut) {
+  return useQuery({ queryKey: ["chantiers", chantierId, "blocages", statut ?? "TOUS"], queryFn: () => apiGet<{ blocages: BlocageDTO[] }>(`/api/chantiers/${chantierId}/blocages${statut ? `?statut=${statut}` : ""}`).then((r) => r.blocages), enabled: !!chantierId });
+}
+
+export function useCreateBlocage(planId: string | undefined, pointId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (input: CreateBlocageInput) => apiPostJson<{ blocage: BlocageDTO }>(`/api/points/${pointId}/blocages`, input).then((r) => r.blocage), onSuccess: () => { qc.invalidateQueries({ queryKey: ["points", pointId, "blocages"] }); qc.invalidateQueries({ queryKey: ["plans", planId, "points"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); } });
+}
+
+export function useUpdateBlocage(planId: string | undefined, chantierId?: string) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, input }: { id: string; input: UpdateBlocageInput }) => apiPatchJson<{ blocage: BlocageDTO }>(`/api/blocages/${id}`, input).then((r) => r.blocage), onSuccess: (blocage) => { qc.invalidateQueries({ queryKey: ["points", blocage.pointId, "blocages"] }); qc.invalidateQueries({ queryKey: ["plans", planId, "points"] }); qc.invalidateQueries({ queryKey: ["chantiers", blocage.chantierId, "points"] }); qc.invalidateQueries({ queryKey: ["chantiers", chantierId ?? blocage.chantierId, "blocages"] }); qc.invalidateQueries({ queryKey: ["dashboard"] }); } });
+}
+
+export function useUploadBlocagePhoto(pointId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ blocageId, form }: { blocageId: string; form: FormData }) => apiPostForm<{ photo: PhotoDTO }>(`/api/blocages/${blocageId}/photos`, form).then((r) => r.photo), onSuccess: () => qc.invalidateQueries({ queryKey: ["points", pointId, "blocages"] }) });
 }
 
 export function usePhotos(pointId: string | undefined) {

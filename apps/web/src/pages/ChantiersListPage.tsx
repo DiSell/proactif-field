@@ -1,11 +1,17 @@
 import { FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
-import { UserRole } from "@proactif-field/shared";
+import { Link, useNavigate } from "react-router-dom";
+import { ChantierDTO, ChantierStatut, UserRole } from "@proactif-field/shared";
 import { useChantiers, useCreateChantier } from "../api/hooks";
 import { useAuthStore } from "../auth/store";
 import AutocompleteInput from "../components/AutocompleteInput";
+import Icon from "../components/Icon";
+
+type Filter = "TOUS" | "EN_COURS" | "TERMINE";
+const isFinished = (c: ChantierDTO) => [ChantierStatut.TERMINE, ChantierStatut.CLOTURE].includes(c.statut);
+const isStarted = (c: ChantierDTO) => [ChantierStatut.EN_COURS, ChantierStatut.BLOQUE].includes(c.statut);
 
 export default function ChantiersListPage() {
+  const navigate = useNavigate();
   const { data: chantiers, isLoading } = useChantiers();
   const createChantier = useCreateChantier();
   const user = useAuthStore((s) => s.user);
@@ -14,6 +20,12 @@ export default function ChantiersListPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("TOUS");
+  const visible = (chantiers ?? []).filter((c) => {
+    const matchesText = `${c.name} ${c.reference} ${c.address ?? ""}`.toLowerCase().includes(search.toLowerCase());
+    return matchesText && (filter === "TOUS" || (filter === "TERMINE" ? isFinished(c) : isStarted(c)));
+  });
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -32,11 +44,15 @@ export default function ChantiersListPage() {
       </div>
 
       <div className="page">
-        {isAdmin && (
-          <button className="btn block" onClick={() => setShowForm((v) => !v)} style={{ marginBottom: 16 }}>
-            {showForm ? "Annuler" : "+ Nouveau chantier"}
-          </button>
-        )}
+        <div className="chantier-tools">
+          <label className="search-field"><Icon name="search" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un chantier" aria-label="Rechercher un chantier" /></label>
+          <button className="btn secondary filter-button" aria-label="Filtrer"><Icon name="filter" /></button>
+        </div>
+        <div className="filter-chips">
+          <button className={filter === "TOUS" ? "active" : ""} onClick={() => setFilter("TOUS")}>Tous · {chantiers?.length ?? 0}</button>
+          <button className={filter === "EN_COURS" ? "active" : ""} onClick={() => setFilter("EN_COURS")}><span className="status-dot ORANGE" /> En cours · {(chantiers ?? []).filter(isStarted).length}</button>
+          <button className={filter === "TERMINE" ? "active" : ""} onClick={() => setFilter("TERMINE")}><span className="status-dot VERT" /> Terminés · {(chantiers ?? []).filter(isFinished).length}</button>
+        </div>
 
         {showForm && (
           <form onSubmit={submit} className="card">
@@ -55,18 +71,20 @@ export default function ChantiersListPage() {
         )}
 
         {isLoading && <p>Chargement…</p>}
-        {chantiers?.length === 0 && <p>Aucun chantier pour le moment.</p>}
-        {chantiers?.map((c) => (
+        {chantiers?.length === 0 && <div className="empty-state"><Icon name="chantier" size={40} /><p>Aucun chantier pour le moment.</p>{isAdmin && <button className="btn" onClick={() => setShowForm(true)}><Icon name="plus" /> Créer un chantier</button>}</div>}
+        {visible.map((c) => (
           <Link key={c.id} to={`/chantiers/${c.id}`} className="card-link">
-            <div className="card">
-              <h3>
-                {c.name} <span style={{ color: "#94a3b8", fontWeight: 400 }}>· {c.reference}</span>
-                {c.isNewAssignment && <span className="badge-new">Nouveau</span>}
-              </h3>
+            <div className={`card chantier-card ${isFinished(c) ? "finished" : isStarted(c) ? "started" : "pending"}`}>
+              <div className="chantier-card-title"><h3>{c.name}</h3><span className="reference-chip">{c.reference}</span></div>
               {c.address && <p>{c.address}</p>}
+              <div className="segmented-progress" aria-label={isFinished(c) ? "Chantier terminé" : isStarted(c) ? "Chantier en cours" : "Chantier non démarré"}><span className="VERT"/><span className="ORANGE"/><span className="GRIS"/></div>
+              <div className="chantier-card-meta"><strong>{isFinished(c) ? "Terminé" : isStarted(c) ? "En cours" : "Non démarré"}</strong><span>Mis à jour le {new Date(c.updatedAt).toLocaleDateString("fr-FR")}</span></div>
+              {isAdmin && <button className="assign-cta" onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/chantiers/${c.id}/equipe`); }}><Icon name="users" /> Affecter aux techniciens</button>}
+              {c.isNewAssignment && <span className="badge-new">Nouveau</span>}
             </div>
           </Link>
         ))}
+        {isAdmin && <div className="sticky-create"><button className="btn block" onClick={() => setShowForm((v) => !v)}><Icon name={showForm ? "close" : "plus"} />{showForm ? "Annuler" : "Nouveau chantier"}</button></div>}
       </div>
     </>
   );

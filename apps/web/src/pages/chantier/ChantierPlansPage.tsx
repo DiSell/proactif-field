@@ -5,6 +5,7 @@ import { useCreatePoint, usePlans, usePoints, useUploadPlan } from "../../api/ho
 import { useAuthStore } from "../../auth/store";
 import PlanViewer from "../../components/PlanViewer";
 import PointFiche from "../../components/PointFiche";
+import MobileFieldHeader from "../../components/MobileFieldHeader";
 
 // This is the core terrain screen (plan viewer + point creation/selection),
 // unchanged from before the dossier-chantier navigation restructure — only
@@ -17,6 +18,7 @@ export default function ChantierPlansPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const currentUser = useAuthStore((s) => s.user);
   const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const isTechnician = currentUser?.role === UserRole.TECHNICIEN;
 
   const [activePlanId, setActivePlanId] = useState<string | null>(null);
   const [selectedPoint, setSelectedPoint] = useState<PointDTO | null>(null);
@@ -58,26 +60,6 @@ export default function ChantierPlansPage() {
 
   return (
     <>
-      {plans && plans.length > 1 && (
-        <div style={{ display: "flex", gap: 6, padding: "8px 12px", overflowX: "auto", background: "#1e293b" }}>
-          {plans.map((p) => (
-            <button
-              key={p.id}
-              className="btn secondary"
-              style={{ outline: p.id === activePlanId ? "2px solid white" : "none", flexShrink: 0 }}
-              onClick={() => setActivePlanId(p.id)}
-            >
-              {p.fileName}
-            </button>
-          ))}
-          {isAdmin && (
-            <button className="btn secondary" style={{ flexShrink: 0 }} onClick={() => fileInputRef.current?.click()}>
-              + Plan
-            </button>
-          )}
-        </div>
-      )}
-
       <input
         ref={fileInputRef}
         type="file"
@@ -97,25 +79,30 @@ export default function ChantierPlansPage() {
                 {uploadPlan.isPending ? "Import…" : "Importer un plan (PDF, PNG, JPG, SVG)"}
               </button>
             ) : (
-              <p style={{ color: "#94a3b8" }}>En attente d'un plan importé par un administrateur.</p>
+              <p style={{ color: "var(--ink-muted)" }}>En attente d'un plan importé par un administrateur.</p>
             )}
           </div>
         </div>
       ) : (
-        <div style={{ flex: 1, position: "relative" }}>
+        <div className={`plan-workspace ${selectedPoint ? "has-point-panel" : ""}`}>
+          {activePlan && <MobileFieldHeader backTo={`/chantiers/${chantierId}`} plan={activePlan} plans={plans} onPlanChange={(planId) => { setActivePlanId(planId); setSelectedPoint(null); }} />}
+          <div className="plan-workspace-main">
           {activePlan && (
             <PlanViewer
               plan={activePlan}
+              plans={plans}
               points={points ?? []}
               onCreatePoint={handleCreatePoint}
               onSelectPoint={setSelectedPoint}
+              canCreatePoint={isTechnician}
+              selectedPointId={selectedPoint?.id}
+              onPlanChange={(planId) => { setActivePlanId(planId); setSelectedPoint(null); }}
+              onAddPlan={isAdmin ? () => fileInputRef.current?.click() : undefined}
             />
           )}
+          </div>
+          {selectedPoint && activePlan && <PointFiche planId={activePlan.id} point={selectedPoint} canCapture={isTechnician} displayMode="panel" onClose={() => setSelectedPoint(null)} />}
         </div>
-      )}
-
-      {selectedPoint && activePlan && (
-        <PointFiche planId={activePlan.id} point={selectedPoint} onClose={() => setSelectedPoint(null)} />
       )}
     </>
   );

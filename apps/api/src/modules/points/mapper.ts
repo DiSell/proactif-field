@@ -1,7 +1,7 @@
 import { Point } from "@prisma/client";
 import { PointDTO } from "@proactif-field/shared";
 
-type PointWithCount = Point & { _count: { photos: number } };
+type PointWithCount = Point & { _count: { photos: number; blocages: number } };
 
 export function toPointDTO(point: PointWithCount): PointDTO {
   return {
@@ -15,6 +15,7 @@ export function toPointDTO(point: PointWithCount): PointDTO {
     x: point.x,
     y: point.y,
     photoCount: point._count.photos,
+    openBlocageCount: point._count.blocages,
     createdAt: point.createdAt.toISOString(),
     updatedAt: point.updatedAt.toISOString(),
   };

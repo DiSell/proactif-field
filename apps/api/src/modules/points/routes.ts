@@ -8,7 +8,7 @@ import { assertChantierAccess, assertPlanAccess, assertPointAccess } from "../..
 import { toPointDTO } from "./mapper";
 import { PointStatut } from "@prisma/client";
 
-const withCount = { include: { _count: { select: { photos: true } } } } as const;
+const withCount = { include: { _count: { select: { photos: { where: { blocageId: null } }, blocages: { where: { statut: "OUVERT" } } } } } } as const;
 
 const createSchema = z.object({
   identifiant: z.string().min(1),

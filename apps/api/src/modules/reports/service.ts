@@ -69,7 +69,10 @@ export async function generateChantierReport(chantierId: string, generatedById: 
       plans: {
         include: {
           points: {
-            include: { photos: { orderBy: { takenAt: "asc" } } },
+            include: {
+              photos: { where: { blocageId: null }, orderBy: { takenAt: "asc" } },
+              blocages: { include: { photos: { orderBy: { takenAt: "asc" } } }, orderBy: { createdAt: "asc" } },
+            },
             orderBy: { createdAt: "asc" },
           },
         },
@@ -92,6 +95,21 @@ export async function generateChantierReport(chantierId: string, generatedById: 
   doc.moveDown();
   doc.fontSize(10).fillColor("gray").text(`Rapport généré le ${formatDate(new Date())}`);
   doc.fillColor("black");
+
+  const allBlocages = chantier.plans.flatMap((plan) => plan.points.flatMap((point) => point.blocages.map((blocage) => ({ ...blocage, pointIdentifiant: point.identifiant }))));
+  doc.moveDown();
+  doc.fontSize(15).text("Blocages / anomalies", { underline: true });
+  if (allBlocages.length === 0) {
+    doc.fontSize(9).fillColor("gray").text("Aucun blocage signalé sur ce chantier.");
+    doc.fillColor("black");
+  } else {
+    for (const blocage of allBlocages) {
+      doc.fontSize(10).fillColor("black").text(`${blocage.pointIdentifiant} · ${blocage.titre}`);
+      doc.fontSize(8).fillColor("gray").text(`${blocage.statut} · Priorité ${blocage.priorite} · ${formatDate(blocage.createdAt)}`);
+      doc.fontSize(9).fillColor("black").text(blocage.description);
+      doc.moveDown(0.4);
+    }
+  }
 
   for (const plan of chantier.plans) {
     doc.addPage();
@@ -120,6 +138,18 @@ export async function generateChantierReport(chantierId: string, generatedById: 
         .text(`Statut : ${point.statut}    ·    Ajouté le ${formatDate(point.createdAt)}`);
       if (point.commentaire) {
         doc.fontSize(10).fillColor("black").text(`Commentaire : ${point.commentaire}`);
+      }
+      if (point.blocages.length > 0) {
+        doc.moveDown(0.5);
+        doc.fontSize(11).fillColor("#9b2c2c").text("Blocages / anomalies");
+        for (const blocage of point.blocages) {
+          doc.fontSize(10).fillColor("black").text(`${blocage.titre} · ${blocage.statut} · Priorité ${blocage.priorite}`);
+          doc.fontSize(9).text(`${blocage.description} · Signalé le ${formatDate(blocage.createdAt)}`);
+          if (blocage.photos.length > 0) {
+            doc.fontSize(8).fillColor("gray").text("Photos du blocage :");
+            drawPhotoGrid(doc, blocage.photos);
+          }
+        }
       }
       doc.fillColor("black");
       doc.moveDown(0.5);

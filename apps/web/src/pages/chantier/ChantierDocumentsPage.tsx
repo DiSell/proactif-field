@@ -6,6 +6,7 @@ import { apiFetchBlob, ApiError } from "../../api/client";
 import { useAuthStore } from "../../auth/store";
 import AutocompleteInput from "../../components/AutocompleteInput";
 import DocumentPreview from "../../components/DocumentPreview";
+import Icon from "../../components/Icon";
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
@@ -135,7 +136,7 @@ export default function ChantierDocumentsPage() {
       )}
 
       {isLoading && <p>Chargement…</p>}
-      {documents?.length === 0 && <p style={{ color: "#94a3b8" }}>Aucun document pour l'instant.</p>}
+      {documents?.length === 0 && <p style={{ color: "var(--ink-muted)" }}>Aucun document pour l'instant.</p>}
       {documents?.map((doc) => (
         <div key={doc.id} className="card user-card">
           <div style={{ cursor: "pointer" }} onClick={() => setPreviewDoc({ id: doc.id, fileName: doc.fileName })}>
@@ -152,7 +153,7 @@ export default function ChantierDocumentsPage() {
               className="btn secondary"
               onClick={() => setPreviewDoc({ id: doc.id, fileName: doc.fileName })}
             >
-              👁️
+              <Icon name="eye" />
             </button>
             <button
               className="btn secondary"

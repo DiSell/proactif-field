@@ -6,6 +6,7 @@ import { PlanDTO, PointDTO } from "@proactif-field/shared";
 import { apiFetchArrayBuffer } from "../api/client";
 import { useFileObjectUrl } from "../api/files";
 import PointMarker from "./PointMarker";
+import PlanToolbar from "./PlanToolbar";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -14,12 +15,32 @@ interface Props {
   points: PointDTO[];
   onCreatePoint: (x: number, y: number) => void;
   onSelectPoint: (point: PointDTO) => void;
+  canCreatePoint?: boolean;
+  plans?: PlanDTO[];
+  selectedPointId?: string | null;
+  onPlanChange?: (planId: string) => void;
+  onAddPlan?: () => void;
 }
 
-export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint }: Props) {
+export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint, canCreatePoint = true, plans = [plan], selectedPointId, onPlanChange = () => undefined, onAddPlan }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
+  const viewerRef = useRef<HTMLDivElement>(null);
+  const [pointsVisible, setPointsVisible] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === viewerRef.current);
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  async function toggleFullscreen() {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await viewerRef.current?.requestFullscreen();
+  }
 
   function handleContentClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (!canCreatePoint) return;
     if ((e.target as HTMLElement).closest(".point-marker")) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
@@ -29,8 +50,9 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint 
   }
 
   return (
-    <div className="plan-viewer">
+    <div className="plan-viewer" ref={viewerRef}>
       <TransformWrapper initialScale={1} minScale={0.3} maxScale={6} centerOnInit doubleClick={{ mode: "toggle" }}>
+        <PlanToolbar plan={plan} plans={plans} pointsVisible={pointsVisible} isFullscreen={isFullscreen} onPlanChange={onPlanChange} onTogglePoints={() => setPointsVisible((visible) => !visible)} onToggleFullscreen={toggleFullscreen} onAddPlan={onAddPlan} />
         <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
           <div className="plan-content" ref={contentRef} onClick={handleContentClick}>
             {plan.fileType === "PDF" ? (
@@ -38,8 +60,8 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint 
             ) : (
               <PlanImage planId={plan.id} />
             )}
-            {points.map((point) => (
-              <PointMarker key={point.id} point={point} onClick={() => onSelectPoint(point)} />
+            {pointsVisible && points.map((point) => (
+              <PointMarker key={point.id} point={point} selected={point.id === selectedPointId} onClick={() => onSelectPoint(point)} />
             ))}
           </div>
         </TransformComponent>
@@ -50,7 +72,7 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint 
 
 function LoadError({ onRetry }: { onRetry: () => void }) {
   return (
-    <div style={{ padding: 40, color: "#94a3b8", textAlign: "center" }}>
+    <div style={{ padding: 40, color: "var(--ink-muted)", textAlign: "center" }}>
       <p>Le plan n'a pas pu être chargé.</p>
       <button className="btn secondary" onClick={onRetry}>
         Réessayer
@@ -62,7 +84,7 @@ function LoadError({ onRetry }: { onRetry: () => void }) {
 function PlanImage({ planId }: { planId: string }) {
   const { url, error, retry } = useFileObjectUrl("plans", planId);
   if (error) return <LoadError onRetry={retry} />;
-  if (!url) return <div style={{ padding: 40, color: "#94a3b8" }}>Chargement du plan…</div>;
+  if (!url) return <div style={{ padding: 40, color: "var(--ink-muted)" }}>Chargement du plan…</div>;
   return <img src={url} alt="Plan" draggable={false} />;
 }
 
@@ -105,7 +127,7 @@ function PdfPage({ planId }: { planId: string }) {
 
   return (
     <>
-      {loading && <div style={{ padding: 40, color: "#94a3b8" }}>Chargement du plan…</div>}
+      {loading && <div style={{ padding: 40, color: "var(--ink-muted)" }}>Chargement du plan…</div>}
       <canvas ref={canvasRef} style={{ display: loading ? "none" : "block" }} />
     </>
   );

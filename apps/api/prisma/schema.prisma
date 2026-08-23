@@ -43,6 +43,12 @@ enum BlocageStatut {
   RESOLU
 }
 
+enum BlocagePriorite {
+  FAIBLE
+  NORMALE
+  HAUTE
+}
+
 model Organization {
   id        String   @id @default(cuid())
   name      String
@@ -51,6 +57,7 @@ model Organization {
   users      User[]
   chantiers  Chantier[]
   termValues TermValue[]
+  blocages   Blocage[]
 }
 
 model User {
@@ -69,7 +76,8 @@ model User {
   reports              Report[]
   chantierAssignments  ChantierAssignment[]
   documentsUploaded    Document[]
-  blocagesAuthored     Blocage[]
+  blocagesCreated      Blocage[]            @relation("BlocageCreatedBy")
+  blocagesResolved     Blocage[]            @relation("BlocageResolvedBy")
   activityLogs         ActivityLog[]
 }
 
@@ -98,6 +106,7 @@ model Chantier {
   reports        Report[]
   assignments    ChantierAssignment[]
   activityLogs   ActivityLog[]
+  blocages       Blocage[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -210,18 +219,29 @@ model Materiel {
 }
 
 model Blocage {
-  id          String        @id @default(cuid())
-  pointId     String
-  point       Point         @relation(fields: [pointId], references: [id], onDelete: Cascade)
-  categorie   String?
-  description String?
-  commentaire String?
-  statut      BlocageStatut @default(OUVERT)
-  authorId    String
-  author      User          @relation(fields: [authorId], references: [id])
-  photos      Photo[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id             String           @id @default(cuid())
+  organizationId String
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  chantierId     String
+  chantier       Chantier         @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  pointId        String
+  point          Point            @relation(fields: [pointId], references: [id], onDelete: Cascade)
+  createdById    String
+  createdBy      User             @relation("BlocageCreatedBy", fields: [createdById], references: [id])
+  titre          String
+  description    String
+  statut         BlocageStatut    @default(OUVERT)
+  priorite       BlocagePriorite  @default(NORMALE)
+  resolvedAt     DateTime?
+  resolvedById   String?
+  resolvedBy     User?            @relation("BlocageResolvedBy", fields: [resolvedById], references: [id])
+  photos         Photo[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([organizationId, statut])
+  @@index([chantierId, statut])
+  @@index([pointId, statut])
 }
 
 // Automatic audit trail for a dossier — never hand-filled by a technician.

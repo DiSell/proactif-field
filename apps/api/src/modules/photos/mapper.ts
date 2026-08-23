@@ -10,5 +10,6 @@ export function toPhotoDTO(photo: Photo): PhotoDTO {
     gpsLng: photo.gpsLng,
     gpsAccuracy: photo.gpsAccuracy,
     createdAt: photo.createdAt.toISOString(),
+    blocageId: photo.blocageId,
   };
 }

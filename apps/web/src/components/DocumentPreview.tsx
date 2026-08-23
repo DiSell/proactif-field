@@ -81,13 +81,13 @@ export default function DocumentPreview({ documentId, fileName, onClose, onDownl
 
         {kind !== "pdf" && (
           <div className="report-preview-frame">
-            {fetching && <p style={{ color: "#94a3b8", padding: 16 }}>Chargement de l'aperçu…</p>}
+            {fetching && <p style={{ color: "var(--ink-muted)", padding: 16 }}>Chargement de l'aperçu…</p>}
             {fetchError && <p style={{ color: "#fca5a5", padding: 16 }}>Impossible d'afficher l'aperçu.</p>}
             {!fetching && !fetchError && kind === "image" && imageUrl && (
               <img src={imageUrl} alt="" style={{ maxWidth: "100%", display: "block", margin: "0 auto" }} />
             )}
             {!fetching && !fetchError && kind === "other" && (
-              <p style={{ color: "#94a3b8", padding: 16, textAlign: "center" }}>
+              <p style={{ color: "var(--ink-muted)", padding: 16, textAlign: "center" }}>
                 Aperçu non disponible pour ce type de fichier. Télécharge-le pour l'ouvrir.
               </p>
             )}

@@ -16,6 +16,17 @@ export enum UserRole {
   TECHNICIEN = "TECHNICIEN",
 }
 
+export enum BlocageStatut {
+  OUVERT = "OUVERT",
+  RESOLU = "RESOLU",
+}
+
+export enum BlocagePriorite {
+  FAIBLE = "FAIBLE",
+  NORMALE = "NORMALE",
+  HAUTE = "HAUTE",
+}
+
 export interface OrganizationDTO {
   id: string;
   name: string;
@@ -97,6 +108,7 @@ export interface PointDTO {
   x: number;
   y: number;
   photoCount: number;
+  openBlocageCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -109,6 +121,42 @@ export interface PhotoDTO {
   gpsLng: number | null;
   gpsAccuracy: number | null;
   createdAt: string;
+  blocageId: string | null;
+}
+
+export interface BlocageDTO {
+  id: string;
+  organizationId: string;
+  chantierId: string;
+  pointId: string;
+  pointIdentifiant: string;
+  createdById: string;
+  createdByName: string;
+  titre: string;
+  description: string;
+  statut: BlocageStatut;
+  priorite: BlocagePriorite;
+  photos: PhotoDTO[];
+  photoCount: number;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  resolvedById: string | null;
+  resolvedByName: string | null;
+}
+
+export interface CreateBlocageInput {
+  id?: string;
+  titre: string;
+  description: string;
+  priorite: BlocagePriorite;
+}
+
+export interface UpdateBlocageInput {
+  titre?: string;
+  description?: string;
+  priorite?: BlocagePriorite;
+  statut?: BlocageStatut;
 }
 
 export interface ReportDTO {
@@ -127,6 +175,8 @@ export interface DashboardStatsDTO {
   progressPercent: number;
   recentChantiers: ChantierDTO[];
   recentReports: ReportDTO[];
+  openBlocageCount: number;
+  recentBlocages: BlocageDTO[];
 }
 
 export interface CreatePointInput {

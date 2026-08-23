@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { UserDTO } from "@proactif-field/shared";
 import { apiPostJson, ApiError } from "../api/client";
 import { useAuthStore } from "../auth/store";
+import Icon from "../components/Icon";
 
 export default function LoginPage() {
   const token = useAuthStore((s) => s.token);
@@ -83,7 +84,7 @@ export default function LoginPage() {
               aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
               aria-pressed={showPassword}
             >
-              {showPassword ? "🙈" : "👁️"}
+              <Icon name={showPassword ? "eye-off" : "eye"} />
             </button>
           </div>
         </div>

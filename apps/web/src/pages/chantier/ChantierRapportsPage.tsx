@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { useChantier, useGenerateReport } from "../../api/hooks";
 import { apiFetchArrayBuffer } from "../../api/client";
 import ReportPreview from "../../components/ReportPreview";
+import Icon from "../../components/Icon";
 
 export default function ChantierRapportsPage() {
   const { chantierId } = useParams<{ chantierId: string }>();
@@ -37,7 +38,7 @@ export default function ChantierRapportsPage() {
   return (
     <div className="page">
       <button className="btn block" onClick={handleGenerateReport} disabled={busy}>
-        {busy ? "Génération…" : "📄 Générer le rapport PDF"}
+        {!busy && <Icon name="report" />}{busy ? "Génération…" : "Générer le rapport PDF"}
       </button>
 
       {reportBuffer && (

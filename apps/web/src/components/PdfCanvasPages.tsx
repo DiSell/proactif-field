@@ -54,7 +54,7 @@ export default function PdfCanvasPages({ arrayBuffer }: { arrayBuffer: ArrayBuff
 
   return (
     <div className="report-preview-frame">
-      {loading && <p style={{ color: "#94a3b8", padding: 16 }}>Chargement de l'aperçu…</p>}
+      {loading && <p style={{ color: "var(--ink-muted)", padding: 16 }}>Chargement de l'aperçu…</p>}
       {error && <p style={{ color: "#fca5a5", padding: 16 }}>Impossible d'afficher l'aperçu.</p>}
       <div ref={containerRef} className="report-preview-pages" />
     </div>

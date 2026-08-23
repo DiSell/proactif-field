@@ -9,7 +9,7 @@ export default function ChantierPointsPage() {
   return (
     <div className="page">
       {isLoading && <p>Chargement…</p>}
-      {points?.length === 0 && <p style={{ color: "#94a3b8" }}>Aucun point pour l'instant.</p>}
+      {points?.length === 0 && <p style={{ color: "var(--ink-muted)" }}>Aucun point pour l'instant.</p>}
       {points?.map((p) => (
         <div key={p.id} className="card user-card">
           <div>

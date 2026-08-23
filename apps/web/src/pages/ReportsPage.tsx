@@ -33,7 +33,7 @@ export default function ReportsPage() {
 
       <div className="page">
         {isLoading && <p>Chargement…</p>}
-        {reports?.length === 0 && <p style={{ color: "#94a3b8" }}>Aucun rapport généré pour le moment.</p>}
+        {reports?.length === 0 && <p style={{ color: "var(--ink-muted)" }}>Aucun rapport généré pour le moment.</p>}
         {reports?.map((r) => (
           <div key={r.id} className="card user-card">
             <div>

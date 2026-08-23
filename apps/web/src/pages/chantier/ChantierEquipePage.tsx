@@ -24,7 +24,7 @@ export default function ChantierEquipePage() {
       {!isAdmin && (
         <>
           {(chantier?.assignedUserIds.length ?? 0) === 0 && (
-            <p style={{ color: "#94a3b8" }}>Aucun technicien assigné.</p>
+            <p style={{ color: "var(--ink-muted)" }}>Aucun technicien assigné.</p>
           )}
           {technicians
             .filter((t) => chantier?.assignedUserIds.includes(t.id))
@@ -40,7 +40,7 @@ export default function ChantierEquipePage() {
       {isAdmin && (
         <>
           {technicians.length === 0 && (
-            <p style={{ color: "#94a3b8" }}>
+            <p style={{ color: "var(--ink-muted)" }}>
               Aucun technicien dans l'entreprise. Ajoutes-en depuis la page "Utilisateurs".
             </p>
           )}
@@ -54,7 +54,7 @@ export default function ChantierEquipePage() {
                   onChange={() => (isAssigned ? unassign.mutate(tech.id) : assign.mutate(tech.id))}
                 />
                 <span>{tech.name}</span>
-                <span style={{ color: "#94a3b8", fontSize: 13 }}>{tech.email}</span>
+                <span style={{ color: "var(--ink-muted)", fontSize: 13 }}>{tech.email}</span>
               </label>
             );
           })}

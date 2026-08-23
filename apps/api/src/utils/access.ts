@@ -58,3 +58,12 @@ export async function assertDocumentAccess(documentId: string, auth: AuthContext
   await assertChantierAccess(doc.chantierId, auth);
   return doc;
 }
+
+export async function assertBlocageAccess(blocageId: string, auth: AuthContext): Promise<{ chantierId: string; pointId: string }> {
+  const blocage = await prisma.blocage.findUnique({ where: { id: blocageId }, select: { chantierId: true, pointId: true, organizationId: true } });
+  if (!blocage || blocage.organizationId !== auth.organizationId) {
+    throw new HttpError(404, "Blocage introuvable");
+  }
+  await assertChantierAccess(blocage.chantierId, auth);
+  return blocage;
+}
