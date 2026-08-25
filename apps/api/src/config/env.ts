@@ -8,6 +8,15 @@ function required(name: string): string {
   return value;
 }
 
+const usesSmtpVariables = Boolean(process.env.SMTP_HOST || process.env.SMTP_FROM);
+const smtpPort = Number(
+  usesSmtpVariables
+    ? process.env.SMTP_PORT || 587
+    : process.env.EMAIL_SMTP_PORT || 587
+);
+const smtpFromAddress = process.env.EMAIL_FROM_ADDRESS ?? "";
+const smtpFromName = process.env.EMAIL_FROM_NAME ?? "Proactif Field";
+
 export const env = {
   databaseUrl: required("DATABASE_URL"),
   jwtSecret: required("JWT_SECRET"),
@@ -20,10 +29,12 @@ export const env = {
   vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? "",
   vapidSubject: process.env.VAPID_SUBJECT ?? "mailto:notifications@proactif-field.fr",
   webUrl: process.env.WEB_URL ?? "http://localhost:5173",
-  smtpHost: process.env.SMTP_HOST ?? "",
-  smtpPort: Number(process.env.SMTP_PORT ?? 587),
-  smtpSecure: process.env.SMTP_SECURE === "true",
-  smtpUser: process.env.SMTP_USER ?? "",
-  smtpPass: process.env.SMTP_PASS ?? "",
-  smtpFrom: process.env.SMTP_FROM ?? "",
+  smtpHost: usesSmtpVariables ? process.env.SMTP_HOST ?? "" : process.env.EMAIL_SMTP_HOST ?? "",
+  smtpPort,
+  smtpSecure: process.env.SMTP_SECURE
+    ? process.env.SMTP_SECURE === "true"
+    : smtpPort === 465,
+  smtpUser: usesSmtpVariables ? process.env.SMTP_USER ?? "" : process.env.EMAIL_SMTP_USER ?? "",
+  smtpPass: usesSmtpVariables ? process.env.SMTP_PASS ?? "" : process.env.EMAIL_SMTP_PASSWORD ?? "",
+  smtpFrom: usesSmtpVariables ? process.env.SMTP_FROM ?? "" : (smtpFromAddress ? `${smtpFromName} <${smtpFromAddress}>` : ""),
 };
