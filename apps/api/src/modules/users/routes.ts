@@ -15,7 +15,7 @@ usersRouter.use(requireAuth, requireAdmin);
 
 const createSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().trim().email().transform((email) => email.toLowerCase()),
   role: z.nativeEnum(UserRole),
   phone: z.string().trim().max(40).optional(),
   employerCompany: z.string().trim().max(160).optional(),
@@ -46,8 +46,43 @@ usersRouter.post(
     const input = createSchema.parse(req.body);
     if (!invitationEmailEnabled) throw new HttpError(503, "Configurez l'envoi d'e-mails avant d'inviter un utilisateur");
     const existing = await prisma.user.findUnique({ where: { email: input.email } });
-    if (existing && !existing.deletedAt) {
+    if (existing && existing.organizationId !== req.auth!.organizationId && !existing.deletedAt) {
       throw new HttpError(409, "Un compte existe déjà avec cet email");
+    }
+    if (existing?.organizationId === req.auth!.organizationId && existing.role === UserRole.ADMIN && !existing.deletedAt) {
+      throw new HttpError(409, "Cette adresse appartient déjà à un administrateur");
+    }
+    const invitation = createInvitationToken();
+    const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("base64url"), 10);
+    const organization = await prisma.organization.findUnique({ where: { id: req.auth!.organizationId }, select: { name: true, contactEmail: true } });
+
+    // Re-inviting an address already belonging to this organization is an
+    // explicit reset: revoke the former terrain access and issue a fresh,
+    // independent activation link instead of returning a misleading 409.
+    if (existing?.organizationId === req.auth!.organizationId) {
+      const [, , user] = await prisma.$transaction([
+        prisma.chantierAssignment.deleteMany({ where: { userId: existing.id } }),
+        prisma.pushSubscription.deleteMany({ where: { userId: existing.id } }),
+        prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            name: input.name,
+            passwordHash,
+            isActive: false,
+            deletedAt: null,
+            inviteTokenHash: invitation.hash,
+            inviteExpiresAt: invitation.expiresAt,
+            invitedAt: new Date(),
+            invitationAcceptedAt: null,
+            role: input.role,
+            phone: input.phone || null,
+            employerCompany: input.employerCompany || null,
+          },
+        }),
+      ]);
+      await sendTechnicianInvitation({ email: user.email, name: user.name, role: user.role, organizationName: organization?.name ?? "Votre entreprise", contactEmail: organization?.contactEmail, token: invitation.raw });
+      res.status(201).json({ user: toUserDTO(user) });
+      return;
     }
     // Older deleted accounts may still contain their original email even
     // though they no longer appear in the users list. Release that unique
@@ -63,8 +98,6 @@ usersRouter.post(
         },
       });
     }
-    const invitation = createInvitationToken();
-    const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("base64url"), 10);
     const user = await prisma.user.create({
       data: {
         name: input.name,
@@ -76,7 +109,6 @@ usersRouter.post(
         organizationId: req.auth!.organizationId,
       },
     });
-    const organization = await prisma.organization.findUnique({ where: { id: req.auth!.organizationId }, select: { name: true, contactEmail: true } });
     await sendTechnicianInvitation({ email: user.email, name: user.name, role: user.role, organizationName: organization?.name ?? "Votre entreprise", contactEmail: organization?.contactEmail, token: invitation.raw });
     res.status(201).json({ user: toUserDTO(user) });
   })
