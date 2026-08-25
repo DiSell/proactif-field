@@ -1,6 +1,6 @@
 import { PointStatut, UserRole } from "@proactif-field/shared";
 import { Link, useParams } from "react-router-dom";
-import { useChantier, useChantierPoints, useOrgReports, usePlans, useUsers } from "../../api/hooks";
+import { useChantier, useChantierMateriel, useChantierPoints, useOrgReports, usePlans, useUsers } from "../../api/hooks";
 import { useAuthStore } from "../../auth/store";
 import Icon from "../../components/Icon";
 
@@ -17,6 +17,7 @@ export default function ChantierOverviewPage() {
   const { data: chantier } = useChantier(chantierId);
   const { data: plans } = usePlans(chantierId);
   const { data: points } = useChantierPoints(chantierId);
+  const { data: materiels } = useChantierMateriel(chantierId);
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === UserRole.ADMIN;
   const base = `/chantiers/${chantierId}`;
@@ -29,6 +30,8 @@ export default function ChantierOverviewPage() {
   const pendingPoints = points?.filter((point) => point.statut === PointStatut.GRIS).length ?? 0;
   const progress = totalPoints === 0 ? 0 : Math.round((completedPoints / totalPoints) * 100);
   const openBlocages = points?.reduce((total, point) => total + point.openBlocageCount, 0) ?? 0;
+  const materielCount = materiels?.length ?? 0;
+  const materielOverruns = materiels?.filter((m) => m.quantitePrevue != null && m.quantiteUtilisee != null && m.quantiteUtilisee > m.quantitePrevue).length ?? 0;
 
   return (
     <main className="page chantier-overview-page">
@@ -40,6 +43,7 @@ export default function ChantierOverviewPage() {
         <article><span>En cours</span><strong>{activePoints}</strong><small>{pendingPoints} à faire</small></article>
         <article><span>Plans</span><strong>{plans?.length ?? 0}</strong><small>{chantier.assignedUserIds.length} technicien{chantier.assignedUserIds.length > 1 ? "s" : ""}</small></article>
         <article><span>Blocages ouverts</span><strong>{openBlocages}</strong><small>{openBlocages > 0 ? "Attention requise" : "Aucun blocage"}</small></article>
+        {materielCount > 0 && <article><span>Matériel</span><strong>{materielCount}</strong><small>{materielOverruns > 0 ? `${materielOverruns} dépassement${materielOverruns > 1 ? "s" : ""}` : "ligne" + (materielCount > 1 ? "s" : "")}</small></article>}
       </section>
 
       <div className="chantier-overview-grid">

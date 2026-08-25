@@ -31,6 +31,7 @@ async function execute(type: string, resourceId: string, payload: Record<string,
     case "BLOCAGE_CREATE": await apiPostJson(`/api/points/${payload.pointId}/blocages`, payload.input); break;
     case "BLOCAGE_UPDATE": await apiPatchJson(`/api/blocages/${resourceId}`, payload.input); break;
     case "PHOTO_BLOCAGE_CREATE": await apiPostForm(`/api/blocages/${payload.blocageId}/photos`, photoForm(payload)); break;
+    case "MATERIEL_UPDATE": await apiPatchJson(`/api/materiel/${resourceId}`, payload.input); break;
     default: throw new Error(`Opération hors ligne inconnue : ${type}`);
   }
 }

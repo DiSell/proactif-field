@@ -1,4 +1,4 @@
-import { BlocageDTO, BlocagePhotoRole, BlocageStatut, CreateBlocageInput, CreatePointInput, PhotoDTO, PointDTO, UpdateBlocageInput, UpdatePointInput } from "@proactif-field/shared";
+import { BlocageDTO, BlocagePhotoRole, BlocageStatut, CreateBlocageInput, CreatePointInput, MaterielDTO, PhotoDTO, PointDTO, UpdateBlocageInput, UpdateMaterielInput, UpdatePointInput } from "@proactif-field/shared";
 import { useAuthStore } from "../auth/store";
 import { enqueueOperation, getSnapshots, mutateSnapshot } from "./db";
 import { cacheLocalFile } from "./cache";
@@ -15,6 +15,10 @@ export async function findSnapshotByPlan(planId: string) {
 
 export async function findSnapshotByPoint(pointId: string) {
   return (await getSnapshots(userId())).find((snapshot) => snapshot.points.some((point) => point.id === pointId));
+}
+
+export async function findSnapshotByMateriel(materielId: string) {
+  return (await getSnapshots(userId())).find((snapshot) => snapshot.materiels.some((materiel) => materiel.id === materielId));
 }
 
 export async function createLocalPoint(planId: string, input: CreatePointInput): Promise<PointDTO> {
@@ -71,6 +75,20 @@ export async function enqueueBlocagePhoto(blocageId: string, form: FormData): Pr
   await mutateSnapshot(userId(), snapshot.chantier.id, (current) => ({ ...current, photos: [...current.photos, photo], blocages: current.blocages.map((blocage) => blocage.id === blocageId ? { ...blocage, photos: [...blocage.photos, photo], photoCount: blocage.photoCount + 1 } : blocage) }));
   await enqueueOperation({ id: crypto.randomUUID(), userId: userId(), chantierId: snapshot.chantier.id, type: "PHOTO_BLOCAGE_CREATE", resourceId: blocageId, payload: { blocageId, blocageRole: role, arrayBuffer: await file.arrayBuffer(), mimeType: file.type || "image/jpeg", fileName: file instanceof File ? file.name : `photo-${Date.now()}.jpg`, takenAt: photo.takenAt }, createdAt: now });
   return photo;
+}
+
+export async function updateLocalMateriel(id: string, input: UpdateMaterielInput): Promise<MaterielDTO> {
+  const snapshot = await findSnapshotByMateriel(id);
+  if (!snapshot) throw new Error("Matériel indisponible hors ligne.");
+  let updated!: MaterielDTO;
+  await mutateSnapshot(userId(), snapshot.chantier.id, (current) => ({
+    ...current,
+    materiels: current.materiels.map((materiel) =>
+      materiel.id === id ? (updated = { ...materiel, ...input, updatedAt: new Date().toISOString() }) : materiel
+    ),
+  }));
+  await enqueueOperation({ id: crypto.randomUUID(), userId: userId(), chantierId: snapshot.chantier.id, type: "MATERIEL_UPDATE", resourceId: id, payload: { input }, createdAt: new Date().toISOString() });
+  return updated;
 }
 
 function gpsDistance(aLat?: number | null, aLng?: number | null, bLat?: number | null, bLng?: number | null): number | null {

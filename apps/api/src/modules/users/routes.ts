@@ -140,10 +140,27 @@ usersRouter.patch(
   })
 );
 
+// Exported for direct unit testing: through the live API this branch is
+// only reachable indirectly (see test/last-admin.test.ts) because the
+// caller must itself be an active ADMIN distinct from the target, which
+// always keeps the post-deletion count at 1 or more — the one case that
+// really zeroes out active admins (the sole admin deleting themselves) is
+// caught earlier by the self-delete check above, not by this guard.
+export async function assertNotLastActiveAdmin(user: { id: string; organizationId: string; role: UserRole; isActive: boolean }): Promise<void> {
+  if (user.role !== UserRole.ADMIN || !user.isActive) return;
+  const otherActiveAdmins = await prisma.user.count({
+    where: { organizationId: user.organizationId, role: UserRole.ADMIN, isActive: true, deletedAt: null, id: { not: user.id } },
+  });
+  if (otherActiveAdmins === 0) {
+    throw new HttpError(409, "Impossible de supprimer le dernier administrateur actif de l'entreprise");
+  }
+}
+
 usersRouter.delete("/:id", asyncHandler(async (req, res) => {
   const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!existing || existing.deletedAt || existing.organizationId !== req.auth!.organizationId) throw new HttpError(404, "Utilisateur introuvable");
   if (existing.id === req.auth!.userId) throw new HttpError(400, "Impossible de supprimer votre propre compte");
+  await assertNotLastActiveAdmin(existing);
   const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("base64url"), 10);
   await prisma.$transaction([
     prisma.chantierAssignment.deleteMany({ where: { userId: existing.id } }),

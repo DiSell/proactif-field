@@ -74,10 +74,12 @@ model Organization {
   locale String @default("fr-FR")
   notificationPreferences Json @default("{}")
 
-  users      User[]
-  chantiers  Chantier[]
-  termValues TermValue[]
-  blocages   Blocage[]
+  users        User[]
+  chantiers    Chantier[]
+  termValues   TermValue[]
+  blocages     Blocage[]
+  activityLogs ActivityLog[]
+  materiels    Materiel[]
 }
 
 model User {
@@ -107,6 +109,8 @@ model User {
   blocagesResolved     Blocage[]            @relation("BlocageResolvedBy")
   activityLogs         ActivityLog[]
   pushSubscriptions    PushSubscription[]
+  materielsCreated     Materiel[]           @relation("MaterielCreatedBy")
+  materielsUpdated     Materiel[]           @relation("MaterielUpdatedBy")
 }
 
 model PushSubscription {
@@ -246,18 +250,30 @@ model Document {
   createdAt      DateTime @default(now())
 }
 
+// "What was planned for this chantier, and what was actually used?" —
+// deliberately not a stock/inventory system: no warehouse, no reservations,
+// no suppliers, no pricing. See modules/materiel/routes.ts.
 model Materiel {
-  id                String   @id @default(cuid())
-  chantierId        String
-  chantier          Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade)
-  designation       String
-  reference         String?
-  quantitePrevue    Float?
-  quantiteUtilisee  Float?
-  unite             String?
-  commentaire       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id               String       @id @default(cuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  chantierId       String
+  chantier         Chantier     @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  reference        String?
+  designation      String
+  quantitePrevue   Float?
+  quantiteUtilisee Float?
+  unite            String?
+  commentaire      String?
+  createdById      String
+  createdBy        User         @relation("MaterielCreatedBy", fields: [createdById], references: [id])
+  updatedById      String?
+  updatedBy        User?        @relation("MaterielUpdatedBy", fields: [updatedById], references: [id])
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([chantierId])
+  @@index([organizationId])
 }
 
 model Blocage {
@@ -298,20 +314,27 @@ model Blocage {
 }
 
 // Automatic audit trail for a dossier — never hand-filled by a technician.
-// Written by the backend whenever a tracked action happens (wiring the
-// actual log-writing calls into each route is left to the phase that
-// ships the Historique screen, so logging and its UI land together).
+// Written exclusively through activity/service.ts#logActivity, which
+// allowlists what each action type is allowed to put in `metadata` so no
+// module can leak an incompatible or sensitive shape into this table.
 model ActivityLog {
-  id          String   @id @default(cuid())
-  chantierId  String
-  chantier    Chantier @relation(fields: [chantierId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  action      String
-  description String?
-  createdAt   DateTime @default(now())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  chantierId     String
+  chantier       Chantier     @relation(fields: [chantierId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  action         String
+  description    String?
+  // Small, display-oriented key/value bag (point/plan/document ids and
+  // names, previous/new statut, ...) — never secrets or raw file content.
+  // Shape is enforced per-action by logActivity's allowlist, not by Prisma.
+  metadata       Json?
+  createdAt      DateTime     @default(now())
 
   @@index([chantierId, createdAt])
+  @@index([organizationId, createdAt])
 }
 
 // Generic, business-agnostic autocomplete library: every text field in the

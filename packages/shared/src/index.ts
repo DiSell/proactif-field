@@ -212,6 +212,22 @@ export interface ReportDTO {
   generatedByName: string;
 }
 
+export interface ActivityLogDTO {
+  id: string;
+  chantierId: string;
+  userId: string;
+  userName: string;
+  action: string;
+  description: string | null;
+  metadata: Record<string, string | number | boolean> | null;
+  createdAt: string;
+}
+
+export interface ActivityLogPageDTO {
+  activities: ActivityLogDTO[];
+  nextCursor: string | null;
+}
+
 export interface DashboardStatsDTO {
   chantierCount: number;
   pointCount: number;
@@ -240,6 +256,7 @@ export interface ChantierSyncDTO {
   points: PointDTO[];
   blocages: BlocageDTO[];
   photos: PhotoDTO[];
+  materiels: MaterielDTO[];
   syncedAt: string;
 }
 
@@ -279,6 +296,44 @@ export interface DocumentDTO {
   uploadedById: string;
   uploadedByName: string;
   createdAt: string;
+}
+
+export interface MaterielDTO {
+  id: string;
+  chantierId: string;
+  reference: string | null;
+  designation: string;
+  quantitePrevue: number | null;
+  quantiteUtilisee: number | null;
+  unite: string | null;
+  commentaire: string | null;
+  createdById: string;
+  createdByName: string;
+  updatedById: string | null;
+  updatedByName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateMaterielInput {
+  reference?: string;
+  designation: string;
+  quantitePrevue?: number | null;
+  quantiteUtilisee?: number | null;
+  unite?: string;
+  commentaire?: string;
+}
+
+// Also used for the TECHNICIEN quick-edit, which the backend restricts to
+// quantiteUtilisee/commentaire regardless of what this type allows — see
+// modules/materiel/routes.ts.
+export interface UpdateMaterielInput {
+  reference?: string | null;
+  designation?: string;
+  quantitePrevue?: number | null;
+  quantiteUtilisee?: number | null;
+  unite?: string | null;
+  commentaire?: string | null;
 }
 
 export interface CreateUserInput {

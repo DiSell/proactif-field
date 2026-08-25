@@ -9,6 +9,7 @@ import { uploadPhoto } from "../../middleware/upload";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { assertBlocageAccess, assertChantierAccess, assertPointAccess } from "../../utils/access";
 import { toBlocageDTO } from "./mapper";
+import { logActivity } from "../activity/service";
 
 const relations = { include: { point: { select: { identifiant: true } }, createdBy: { select: { name: true } }, resolvedBy: { select: { name: true } }, photos: { orderBy: { takenAt: "asc" as const } } } } as const;
 const coordinate = z.number().min(0).max(1);
@@ -47,7 +48,7 @@ pointBlocagesRouter.post("/", asyncHandler(async (req, res) => {
   if (!plan) throw new HttpError(404, "Point introuvable");
   const blocage = await prisma.$transaction(async (tx) => {
     const created = await tx.blocage.create({ data: { ...input, distanceMeters: gpsDistanceMeters(input.startGpsLat, input.startGpsLng, input.endGpsLat, input.endGpsLng), pointId: req.params.id, chantierId: plan.chantier.id, organizationId: plan.chantier.organizationId, createdById: req.auth!.userId }, ...relations });
-    await tx.activityLog.create({ data: { chantierId: plan.chantier.id, userId: req.auth!.userId, action: "BLOCAGE_CREE", description: `${created.titre} · ${created.point.identifiant}` } });
+    await logActivity({ organizationId: plan.chantier.organizationId, chantierId: plan.chantier.id, userId: req.auth!.userId, action: "BLOCAGE_CREE", description: `${created.titre} · ${created.point.identifiant}`, metadata: { blocageId: created.id, pointId: created.pointId, pointIdentifiant: created.point.identifiant } }, tx);
     return created;
   });
   res.status(201).json({ blocage: toBlocageDTO(blocage) });
@@ -66,7 +67,8 @@ blocagesRouter.patch("/:id", asyncHandler(async (req, res) => {
   const input = updateSchema.parse(req.body);
   const blocage = await prisma.$transaction(async (tx) => {
     const updated = await tx.blocage.update({ where: { id: req.params.id }, data: { ...input, ...(input.statut === BlocageStatut.RESOLU ? { resolvedAt: new Date(), resolvedById: req.auth!.userId } : input.statut === BlocageStatut.OUVERT ? { resolvedAt: null, resolvedById: null } : {}) }, ...relations });
-    await tx.activityLog.create({ data: { chantierId: access.chantierId, userId: req.auth!.userId, action: input.statut === BlocageStatut.RESOLU ? "BLOCAGE_RESOLU" : "BLOCAGE_MODIFIE", description: `${updated.titre} · ${updated.point.identifiant}` } });
+    const action = input.statut === BlocageStatut.RESOLU ? "BLOCAGE_RESOLU" : "BLOCAGE_MODIFIE";
+    await logActivity({ organizationId: req.auth!.organizationId, chantierId: access.chantierId, userId: req.auth!.userId, action, description: `${updated.titre} · ${updated.point.identifiant}`, metadata: { blocageId: updated.id, pointId: updated.pointId, pointIdentifiant: updated.point.identifiant } }, tx);
     return updated;
   });
   res.json({ blocage: toBlocageDTO(blocage) });

@@ -1,19 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ActivityLogPageDTO,
   ChantierDTO,
   BlocageDTO,
   BlocageStatut,
   CreateBlocageInput,
   UpdateBlocageInput,
+  CreateMaterielInput,
   CreatePointInput,
   CreateUserInput,
   DashboardStatsDTO,
   DocumentDTO,
+  MaterielDTO,
   PhotoDTO,
   PlanDTO,
   PointDTO,
   ReportDTO,
   TermSuggestionDTO,
+  UpdateMaterielInput,
   UpdatePointInput,
   UpdateUserInput,
   UserDTO,
@@ -22,7 +26,7 @@ import {
 } from "@proactif-field/shared";
 import { apiDelete, apiGet, apiPatchJson, apiPostForm, apiPostJson } from "./client";
 import { currentSnapshot, currentSnapshots, refreshAssignedSnapshots, refreshChantierSnapshot } from "../offline/snapshots";
-import { createLocalBlocage, createLocalPoint, enqueueBlocagePhoto, findSnapshotByPlan, findSnapshotByPoint, updateLocalBlocage, updateLocalPoint } from "../offline/localData";
+import { createLocalBlocage, createLocalPoint, enqueueBlocagePhoto, findSnapshotByPlan, findSnapshotByPoint, updateLocalBlocage, updateLocalMateriel, updateLocalPoint } from "../offline/localData";
 import { trySync } from "../offline/syncManager";
 
 async function onlineOrLocal<T>(online: () => Promise<T>, local: () => Promise<T>): Promise<T> {
@@ -172,18 +176,6 @@ export function usePhotos(pointId: string | undefined) {
   });
 }
 
-export function useUploadPhoto(planId: string | undefined, pointId: string | undefined) {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (form: FormData) =>
-      apiPostForm<{ photo: PhotoDTO }>(`/api/points/${pointId}/photos`, form).then((r) => r.photo),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["points", pointId, "photos"] });
-      qc.invalidateQueries({ queryKey: ["plans", planId, "points"] });
-    },
-  });
-}
-
 export function useTermSuggestions(field: string, query: string, enabled: boolean) {
   return useQuery({
     queryKey: ["terms", field, query],
@@ -203,12 +195,40 @@ export function useRecordTerm() {
   });
 }
 
+export function useChantierReports(chantierId: string | undefined) {
+  return useQuery({
+    queryKey: ["chantiers", chantierId, "reports"],
+    queryFn: () =>
+      apiGet<{ reports: ReportDTO[] }>(`/api/chantiers/${chantierId}/reports`).then((r) => r.reports),
+    enabled: !!chantierId,
+  });
+}
+
 export function useGenerateReport(chantierId: string | undefined) {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: () =>
       apiPostJson<{ report: { id: string } }>(`/api/chantiers/${chantierId}/reports`, {}).then(
         (r) => r.report
       ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["chantiers", chantierId, "reports"] });
+      qc.invalidateQueries({ queryKey: ["reports"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
+  });
+}
+
+// Simple "load more" pagination: pass the previous page's nextCursor to
+// fetch the next batch; the page component accumulates results itself.
+export function useChantierActivity(chantierId: string | undefined, cursor: string | null) {
+  return useQuery({
+    queryKey: ["chantiers", chantierId, "activity", cursor ?? "first"],
+    queryFn: () =>
+      apiGet<ActivityLogPageDTO>(
+        `/api/chantiers/${chantierId}/activity${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`
+      ),
+    enabled: !!chantierId,
   });
 }
 
@@ -329,6 +349,49 @@ export function useOrganization() {
 export function useUpdateOrganization() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (input: UpdateOrganizationInput) => apiPatchJson<{ organization: OrganizationDTO }>("/api/organization", input).then((result) => result.organization), onSuccess: (organization) => qc.setQueryData(["organization"], organization) });
+}
+
+export function useChantierMateriel(chantierId: string | undefined) {
+  return useQuery({
+    queryKey: ["chantiers", chantierId, "materiel"],
+    queryFn: () => onlineOrLocal(
+      () => apiGet<{ materiels: MaterielDTO[] }>(`/api/chantiers/${chantierId}/materiel`).then((r) => r.materiels),
+      async () => (await currentSnapshot(chantierId!))?.materiels ?? []
+    ),
+    enabled: !!chantierId,
+  });
+}
+
+export function useCreateMateriel(chantierId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateMaterielInput) =>
+      apiPostJson<{ materiel: MaterielDTO }>(`/api/chantiers/${chantierId}/materiel`, input).then((r) => r.materiel),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chantiers", chantierId, "materiel"] }),
+  });
+}
+
+// Online: PATCH straight away. Offline: written into the snapshot + queued
+// as a MATERIEL_UPDATE operation for the next sync — the only offline
+// materiel path (create/delete stay ADMIN-only, online-only, matching
+// documents/plans).
+export function useUpdateMateriel(chantierId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateMaterielInput }) => onlineOrLocal(
+      () => apiPatchJson<{ materiel: MaterielDTO }>(`/api/materiel/${id}`, input).then((r) => r.materiel),
+      () => updateLocalMateriel(id, input)
+    ),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["chantiers", chantierId, "materiel"] }); void trySync(); },
+  });
+}
+
+export function useDeleteMateriel(chantierId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiDelete(`/api/materiel/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["chantiers", chantierId, "materiel"] }),
+  });
 }
 
 export function useUploadOrganizationLogo() {

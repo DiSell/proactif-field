@@ -31,11 +31,11 @@ export async function assertPlanAccess(planId: string, auth: AuthContext): Promi
   return plan;
 }
 
-export async function assertPointAccess(pointId: string, auth: AuthContext): Promise<{ planId: string }> {
+export async function assertPointAccess(pointId: string, auth: AuthContext): Promise<{ planId: string; chantierId: string }> {
   const point = await prisma.point.findUnique({ where: { id: pointId }, select: { planId: true } });
   if (!point) throw new HttpError(404, "Point introuvable");
-  await assertPlanAccess(point.planId, auth);
-  return point;
+  const { chantierId } = await assertPlanAccess(point.planId, auth);
+  return { planId: point.planId, chantierId };
 }
 
 export async function assertPhotoAccess(photoId: string, auth: AuthContext): Promise<{ pointId: string }> {
@@ -57,6 +57,15 @@ export async function assertDocumentAccess(documentId: string, auth: AuthContext
   if (!doc) throw new HttpError(404, "Document introuvable");
   await assertChantierAccess(doc.chantierId, auth);
   return doc;
+}
+
+export async function assertMaterielAccess(materielId: string, auth: AuthContext): Promise<{ chantierId: string }> {
+  const materiel = await prisma.materiel.findUnique({ where: { id: materielId }, select: { chantierId: true, organizationId: true } });
+  if (!materiel || materiel.organizationId !== auth.organizationId) {
+    throw new HttpError(404, "Matériel introuvable");
+  }
+  await assertChantierAccess(materiel.chantierId, auth);
+  return { chantierId: materiel.chantierId };
 }
 
 export async function assertBlocageAccess(blocageId: string, auth: AuthContext): Promise<{ chantierId: string; pointId: string }> {

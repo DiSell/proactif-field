@@ -9,6 +9,7 @@ import { uploadPhoto } from "../../middleware/upload";
 import { assertPhotoAccess, assertPointAccess } from "../../utils/access";
 import { toPhotoDTO } from "./mapper";
 import { deleteFile } from "../../utils/storage";
+import { logActivityAsync } from "../activity/service";
 
 const metaSchema = z.object({
   takenAt: z.string().datetime(),
@@ -36,7 +37,7 @@ pointPhotosRouter.post(
   "/",
   uploadPhoto.single("file"),
   asyncHandler(async (req, res) => {
-    await assertPointAccess(req.params.id, req.auth!);
+    const { chantierId } = await assertPointAccess(req.params.id, req.auth!);
     if (!req.file) throw new HttpError(400, "Aucun fichier reçu");
 
     const input = metaSchema.parse(req.body);
@@ -55,6 +56,10 @@ pointPhotosRouter.post(
     const point = await prisma.point.findUnique({ where: { id: req.params.id } });
     if (point?.statut === "GRIS") {
       await prisma.point.update({ where: { id: point.id }, data: { statut: "ORANGE" } });
+    }
+
+    if (point) {
+      logActivityAsync({ organizationId: req.auth!.organizationId, chantierId, userId: req.auth!.userId, action: "PHOTO_AJOUTEE", description: point.identifiant, metadata: { pointId: point.id, pointIdentifiant: point.identifiant } });
     }
 
     res.status(201).json({ photo: toPhotoDTO(photo) });

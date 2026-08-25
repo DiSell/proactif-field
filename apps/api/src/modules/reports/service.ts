@@ -7,6 +7,7 @@ import { prisma } from "../../config/db";
 import { HttpError } from "../../middleware/errorHandler";
 import { ensureUploadSubdir, absolutePathFor } from "../../utils/storage";
 import sharp from "sharp";
+import { logActivityAsync } from "../activity/service";
 
 function formatDate(date: Date): string {
   return date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
@@ -63,6 +64,66 @@ function drawPhotoGrid(doc: PDFKit.PDFDocument, photos: Photo[]): void {
   doc.y = rowTop + CELL_H + 8;
 }
 
+const MATERIEL_COLUMNS = [
+  { label: "Référence", width: 70 },
+  { label: "Désignation", width: 160 },
+  { label: "Prévu", width: 60 },
+  { label: "Utilisé", width: 60 },
+  { label: "Unité", width: 50 },
+  { label: "Écart", width: 60 },
+];
+const MATERIEL_ROW_H = 16;
+
+function formatQuantity(value: number | null): string {
+  return value == null ? "—" : Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function drawMaterielTable(
+  doc: PDFKit.PDFDocument,
+  materiels: Array<{ reference: string | null; designation: string; quantitePrevue: number | null; quantiteUtilisee: number | null; unite: string | null }>
+): void {
+  if (materiels.length === 0) {
+    doc.fontSize(9).fillColor("gray").text("Aucun matériel renseigné pour ce chantier.");
+    doc.fillColor("black");
+    return;
+  }
+
+  const left = doc.page.margins.left;
+  const tableWidth = MATERIEL_COLUMNS.reduce((sum, col) => sum + col.width, 0);
+
+  function drawRow(values: string[], bold = false): void {
+    if (doc.y + MATERIEL_ROW_H > doc.page.height - doc.page.margins.bottom) doc.addPage();
+    const y = doc.y;
+    let x = left;
+    doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(9).fillColor(bold ? "black" : "#26364d");
+    MATERIEL_COLUMNS.forEach((col, i) => {
+      doc.text(values[i] ?? "", x, y, { width: col.width, ellipsis: true });
+      x += col.width;
+    });
+    doc.font("Helvetica");
+    doc.y = y + MATERIEL_ROW_H;
+  }
+
+  drawRow(MATERIEL_COLUMNS.map((c) => c.label), true);
+  doc.moveTo(left, doc.y).lineTo(left + tableWidth, doc.y).strokeColor("#cccccc").stroke();
+  doc.y += 2;
+
+  for (const materiel of materiels) {
+    // No gap shown when there's nothing to compare against — a missing
+    // planned quantity isn't a discrepancy, it's just not tracked.
+    const ecart = materiel.quantitePrevue != null && materiel.quantiteUtilisee != null ? materiel.quantiteUtilisee - materiel.quantitePrevue : null;
+    drawRow([
+      materiel.reference ?? "—",
+      materiel.designation,
+      formatQuantity(materiel.quantitePrevue),
+      formatQuantity(materiel.quantiteUtilisee),
+      materiel.unite ?? "—",
+      ecart == null ? "—" : `${ecart > 0 ? "+" : ""}${formatQuantity(ecart)}`,
+    ]);
+  }
+  doc.fillColor("black");
+}
+
 function drawPlanBlocageOverview(doc: PDFKit.PDFDocument, plan: { filePath: string; fileType: string; points: Array<{ blocages: Array<{ startX: number | null; startY: number | null; endX: number | null; endY: number | null; distanceMeters: number | null; statut: string }> }> }): void {
   const blocages = plan.points.flatMap((point) => point.blocages).filter((blocage) => blocage.startX != null && blocage.startY != null && blocage.endX != null && blocage.endY != null);
   if (blocages.length === 0) return;
@@ -97,6 +158,7 @@ export async function generateChantierReport(chantierId: string, generatedById: 
           },
         },
       },
+      materiels: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!chantier) throw new HttpError(404, "Chantier introuvable");
@@ -137,6 +199,11 @@ export async function generateChantierReport(chantierId: string, generatedById: 
       doc.moveDown(0.4);
     }
   }
+
+  doc.moveDown();
+  doc.fontSize(15).text("Matériel", { underline: true });
+  doc.moveDown(0.3);
+  drawMaterielTable(doc, chantier.materiels);
 
   for (const plan of chantier.plans) {
     doc.addPage();
@@ -201,6 +268,8 @@ export async function generateChantierReport(chantierId: string, generatedById: 
     },
     include: { chantier: true, generatedBy: true },
   });
+
+  logActivityAsync({ organizationId: chantier.organizationId, chantierId: chantier.id, userId: generatedById, action: "RAPPORT_GENERE", metadata: { reportId: report.id } });
 
   return report;
 }

@@ -24,7 +24,8 @@ export type OfflineOperationType =
   | "PHOTO_CREATE"
   | "BLOCAGE_CREATE"
   | "BLOCAGE_UPDATE"
-  | "PHOTO_BLOCAGE_CREATE";
+  | "PHOTO_BLOCAGE_CREATE"
+  | "MATERIEL_UPDATE";
 
 export interface OfflineOperation {
   id: string;

@@ -17,8 +17,12 @@ const smtpPort = Number(
 const smtpFromAddress = process.env.EMAIL_FROM_ADDRESS ?? "";
 const smtpFromName = process.env.EMAIL_FROM_NAME ?? "Proactif Field";
 
+// Tests set DATABASE_URL_TEST to point Prisma at an isolated test database
+// instead of DATABASE_URL (production/dev) — see apps/api/test/globalSetup.ts.
+// Never set both in the same real environment; this is a test-only escape
+// hatch, not a general-purpose override.
 export const env = {
-  databaseUrl: required("DATABASE_URL"),
+  databaseUrl: required(process.env.DATABASE_URL_TEST ? "DATABASE_URL_TEST" : "DATABASE_URL"),
   jwtSecret: required("JWT_SECRET"),
   port: Number(process.env.PORT ?? 4000),
   uploadDir: process.env.UPLOAD_DIR ?? "uploads",

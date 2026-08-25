@@ -11,6 +11,7 @@ import { absolutePathFor } from "../../utils/storage";
 import { assertChantierAccess, assertPlanAccess } from "../../utils/access";
 import { toPlanDTO } from "./mapper";
 import { PlanFileType } from "@prisma/client";
+import { logActivityAsync } from "../activity/service";
 
 const extToFileType: Record<string, PlanFileType> = {
   ".pdf": "PDF",
@@ -88,6 +89,7 @@ chantierPlansRouter.post(
         fileType,
       },
     });
+    logActivityAsync({ organizationId: req.auth!.organizationId, chantierId: req.params.id, userId: req.auth!.userId, action: "PLAN_AJOUTE", description: plan.fileName, metadata: { planId: plan.id, planName: plan.fileName } });
     res.status(201).json({ plan: toPlanDTO(plan) });
   })
 );

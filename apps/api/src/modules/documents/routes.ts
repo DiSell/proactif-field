@@ -9,6 +9,7 @@ import { uploadDocument } from "../../middleware/upload";
 import { assertChantierAccess, assertDocumentAccess } from "../../utils/access";
 import { deleteFile } from "../../utils/storage";
 import { toDocumentDTO } from "./mapper";
+import { logActivityAsync } from "../activity/service";
 
 const withUploader = { include: { uploadedBy: true } } as const;
 
@@ -64,6 +65,7 @@ chantierDocumentsRouter.post(
       },
       ...withUploader,
     });
+    logActivityAsync({ organizationId: req.auth!.organizationId, chantierId: req.params.id, userId: req.auth!.userId, action: "DOCUMENT_AJOUTE", description: document.name, metadata: { documentId: document.id, documentName: document.name } });
     res.status(201).json({ document: toDocumentDTO(document) });
   })
 );

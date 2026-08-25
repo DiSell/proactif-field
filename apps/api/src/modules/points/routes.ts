@@ -7,6 +7,7 @@ import { HttpError } from "../../middleware/errorHandler";
 import { assertChantierAccess, assertPlanAccess, assertPointAccess } from "../../utils/access";
 import { toPointDTO } from "./mapper";
 import { PointStatut } from "@prisma/client";
+import { logActivityAsync } from "../activity/service";
 
 const withCount = { include: { _count: { select: { photos: { where: { blocageId: null } }, blocages: { where: { statut: "OUVERT" } } } } } } as const;
 
@@ -50,12 +51,13 @@ planPointsRouter.get(
 planPointsRouter.post(
   "/",
   asyncHandler(async (req, res) => {
-    await assertPlanAccess(req.params.id, req.auth!);
+    const { chantierId } = await assertPlanAccess(req.params.id, req.auth!);
     const input = createSchema.parse(req.body);
     const point = await prisma.point.create({
       data: { ...input, planId: req.params.id },
       ...withCount,
     });
+    logActivityAsync({ organizationId: req.auth!.organizationId, chantierId, userId: req.auth!.userId, action: "POINT_CREE", description: point.identifiant, metadata: { pointId: point.id, pointIdentifiant: point.identifiant, planId: req.params.id } });
     res.status(201).json({ point: toPointDTO(point) });
   })
 );
@@ -94,13 +96,20 @@ pointsRouter.get(
 pointsRouter.patch(
   "/:id",
   asyncHandler(async (req, res) => {
-    await assertPointAccess(req.params.id, req.auth!);
+    const { chantierId } = await assertPointAccess(req.params.id, req.auth!);
     const input = updateSchema.parse(req.body);
+    const before = await prisma.point.findUnique({ where: { id: req.params.id }, select: { identifiant: true, statut: true } });
     const point = await prisma.point.update({
       where: { id: req.params.id },
       data: input,
       ...withCount,
     });
+    const auth = req.auth!;
+    if (input.statut !== undefined && before && input.statut !== before.statut) {
+      logActivityAsync({ organizationId: auth.organizationId, chantierId, userId: auth.userId, action: "POINT_STATUT_MODIFIE", description: `${point.identifiant} : ${before.statut} → ${point.statut}`, metadata: { pointId: point.id, pointIdentifiant: point.identifiant, previousStatut: before.statut, newStatut: point.statut } });
+    } else {
+      logActivityAsync({ organizationId: auth.organizationId, chantierId, userId: auth.userId, action: "POINT_MODIFIE", description: point.identifiant, metadata: { pointId: point.id, pointIdentifiant: point.identifiant } });
+    }
     res.json({ point: toPointDTO(point) });
   })
 );
