@@ -8,22 +8,45 @@ interface AuthState {
   clearAuth: () => void;
 }
 
-const STORAGE_KEY = "proactif-field-auth";
+// Authentication must be scoped to the current browser tab. Using
+// localStorage here caused an administrator session and a technician session
+// opened in two tabs to overwrite each other.
+const SESSION_STORAGE_KEY = "proactif-field-auth-session";
+const LEGACY_STORAGE_KEY = "proactif-field-auth";
 
-function loadInitial(): { token: string | null; user: UserDTO | null } {
+type StoredAuth = { token: string | null; user: UserDTO | null };
+
+function parseStoredAuth(raw: string | null): StoredAuth | null {
+  if (!raw) return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { token: null, user: null };
-    return JSON.parse(raw);
+    const value = JSON.parse(raw) as Partial<StoredAuth>;
+    if (typeof value.token !== "string" || !value.user?.id || !value.user.role) return null;
+    return { token: value.token, user: value.user };
   } catch {
-    return { token: null, user: null };
+    return null;
   }
+}
+
+function loadInitial(): StoredAuth {
+  const currentSession = parseStoredAuth(sessionStorage.getItem(SESSION_STORAGE_KEY));
+  if (currentSession) return currentSession;
+
+  // Keep the user connected once when deploying this change, then remove the
+  // old shared value so future admin/technician tabs are fully independent.
+  const legacySession = parseStoredAuth(localStorage.getItem(LEGACY_STORAGE_KEY));
+  localStorage.removeItem(LEGACY_STORAGE_KEY);
+  if (legacySession) {
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(legacySession));
+    return legacySession;
+  }
+  return { token: null, user: null };
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   ...loadInitial(),
   setAuth: (token, user) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token, user }));
+    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({ token, user }));
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
     set({ token, user });
   },
   clearAuth: () => {
@@ -32,7 +55,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       void import("../offline/db").then(({ clearOfflineData }) => clearOfflineData(userId));
       void import("../offline/cache").then(({ clearPrivateCache }) => clearPrivateCache(userId));
     }
-    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
     set({ token: null, user: null });
   },
 }));

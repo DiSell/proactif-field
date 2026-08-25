@@ -30,6 +30,18 @@ export default function AdminUsersPage() {
     catch (reason) { setFeedback({ type: "error", message: errorMessage(reason, "Impossible de renvoyer l’invitation.") }); }
   }
 
+  async function removeTechnician(user: UserDTO) {
+    if (!confirm(`Supprimer le technicien « ${user.name} » ?\n\nSon accès sera immédiatement révoqué.`)) return;
+    setFeedback(null);
+    try {
+      await deleteUser.mutateAsync(user.id);
+      if (selected?.id === user.id) setSelected(null);
+      setFeedback({ type: "success", message: `Le compte de ${user.name} a été supprimé et son accès révoqué.` });
+    } catch (reason) {
+      setFeedback({ type: "error", message: errorMessage(reason, "Impossible de supprimer ce technicien.") });
+    }
+  }
+
   function openWithKeyboard(event: KeyboardEvent<HTMLElement>, user: UserDTO) {
     if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelected(user); }
   }
@@ -39,7 +51,7 @@ export default function AdminUsersPage() {
     {feedback && <div className={feedback.type === "error" ? "error-banner" : "success-banner"} role="status">{feedback.message}</div>}
     {showForm && <form onSubmit={submit} className="card user-invite-form"><div className="user-form-grid"><Field label="Nom *" value={name} onChange={setName} required /><Field label="E-mail *" value={email} onChange={setEmail} type="email" required /><Field label="Téléphone" value={phone} onChange={setPhone} type="tel" /><Field label="Entreprise employeuse" value={employerCompany} onChange={setEmployerCompany} /><label className="field"><span>Rôle</span><select value={role} onChange={(event) => setRole(event.target.value as UserRole)}><option value={UserRole.TECHNICIEN}>Technicien</option><option value={UserRole.ADMIN}>Administrateur</option></select></label></div><p>Le destinataire recevra un lien personnel valable 48 heures pour choisir son mot de passe.</p><button className="btn block" type="submit" disabled={createUser.isPending}>{createUser.isPending ? "Envoi en cours…" : "Envoyer l’invitation"}</button></form>}
     {isLoading && <p>Chargement…</p>}
-    <div className="user-list">{users?.map((user) => <article key={user.id} className="card user-card user-card-clickable" role="button" tabIndex={0} aria-label={`Ouvrir la fiche de ${user.name}`} onKeyDown={(event) => openWithKeyboard(event, user)} onClick={() => setSelected(user)}><div className="user-card-person"><span className="account-avatar">{user.name.charAt(0).toUpperCase()}</span><div><h3>{user.name} {user.id === currentUser?.id && <small>(votre compte)</small>}</h3><p>{user.email}</p><small>{[user.phone, user.employerCompany].filter(Boolean).join(" · ") || "Informations professionnelles à compléter"}</small>{user.invitationPending && <span className="user-invite-status">Invitation en attente</span>}</div></div><div className="user-card-actions" onClick={(event) => event.stopPropagation()}>{user.invitationPending && <button className="btn secondary" disabled={resendInvitation.isPending} onClick={() => void resend(user)}>Relancer</button>}<span className={`user-role-badge ${user.role}`}>{user.role === UserRole.TECHNICIEN ? "Technicien" : "Administrateur"}</span><span className={`user-state ${user.isActive ? "active" : "inactive"}`}>{user.invitationPending ? "En attente" : user.isActive ? "Actif" : "Désactivé"}</span><button className="btn secondary" onClick={() => setSelected(user)}>Voir la fiche</button></div></article>)}</div>
+    <div className="user-list">{users?.map((user) => <article key={user.id} className="card user-card user-card-clickable" role="button" tabIndex={0} aria-label={`Ouvrir la fiche de ${user.name}`} onKeyDown={(event) => openWithKeyboard(event, user)} onClick={() => setSelected(user)}><div className="user-card-person"><span className="account-avatar">{user.name.charAt(0).toUpperCase()}</span><div><h3>{user.name} {user.id === currentUser?.id && <small>(votre compte)</small>}</h3><p>{user.email}</p><small>{[user.phone, user.employerCompany].filter(Boolean).join(" · ") || "Informations professionnelles à compléter"}</small>{user.invitationPending && <span className="user-invite-status">Invitation en attente</span>}</div></div><div className="user-card-actions" onClick={(event) => event.stopPropagation()}>{user.invitationPending && <button className="btn secondary" disabled={resendInvitation.isPending} onClick={() => void resend(user)}>Relancer</button>}<span className={`user-role-badge ${user.role}`}>{user.role === UserRole.TECHNICIEN ? "Technicien" : "Administrateur"}</span><span className={`user-state ${user.isActive ? "active" : "inactive"}`}>{user.invitationPending ? "En attente" : user.isActive ? "Actif" : "Désactivé"}</span><button className="btn secondary" onClick={() => setSelected(user)}>Voir la fiche</button>{user.role === UserRole.TECHNICIEN && <button className="btn danger" disabled={deleteUser.isPending} onClick={() => void removeTechnician(user)}>{deleteUser.isPending ? "Suppression…" : "Supprimer"}</button>}</div></article>)}</div>
     {selected && <UserDetail user={selected} isSelf={selected.id === currentUser?.id} onClose={() => setSelected(null)} onUpdate={async (input) => { const updated = await updateUser.mutateAsync({ id: selected.id, input }); setSelected(updated); }} onDelete={async () => { await deleteUser.mutateAsync(selected.id); setSelected(null); setFeedback({ type: "success", message: "Le compte a été supprimé et son accès révoqué." }); }} />}
   </div></>;
 }

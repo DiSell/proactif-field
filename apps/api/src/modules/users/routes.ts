@@ -44,11 +44,25 @@ usersRouter.post(
   "/",
   asyncHandler(async (req, res) => {
     const input = createSchema.parse(req.body);
+    if (!invitationEmailEnabled) throw new HttpError(503, "Configurez l'envoi d'e-mails avant d'inviter un utilisateur");
     const existing = await prisma.user.findUnique({ where: { email: input.email } });
-    if (existing) {
+    if (existing && !existing.deletedAt) {
       throw new HttpError(409, "Un compte existe déjà avec cet email");
     }
-    if (!invitationEmailEnabled) throw new HttpError(503, "Configurez l'envoi d'e-mails avant d'inviter un utilisateur");
+    // Older deleted accounts may still contain their original email even
+    // though they no longer appear in the users list. Release that unique
+    // value before creating the new, completely separate account.
+    if (existing?.deletedAt) {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          email: `deleted-${existing.id}@invalid.local`,
+          isActive: false,
+          inviteTokenHash: null,
+          inviteExpiresAt: null,
+        },
+      });
+    }
     const invitation = createInvitationToken();
     const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("base64url"), 10);
     const user = await prisma.user.create({
