@@ -7,7 +7,7 @@ import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { uploadDocument } from "../../middleware/upload";
 import { assertChantierAccess, assertDocumentAccess } from "../../utils/access";
-import { deleteFile } from "../../utils/storage";
+import { decodeOriginalFilename, deleteFile } from "../../utils/storage";
 import { toDocumentDTO } from "./mapper";
 import { logActivityAsync } from "../activity/service";
 
@@ -59,7 +59,7 @@ chantierDocumentsRouter.post(
         date: input.date ? new Date(input.date) : undefined,
         author: input.author,
         commentaire: input.commentaire,
-        fileName: req.file.originalname,
+        fileName: decodeOriginalFilename(req.file.originalname),
         filePath: path.join("documents", req.file.filename),
         uploadedById: req.auth!.userId,
       },

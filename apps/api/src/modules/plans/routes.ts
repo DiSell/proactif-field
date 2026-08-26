@@ -7,7 +7,7 @@ import { requireAdmin, requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { uploadPlan } from "../../middleware/upload";
-import { absolutePathFor } from "../../utils/storage";
+import { absolutePathFor, decodeOriginalFilename } from "../../utils/storage";
 import { assertChantierAccess, assertPlanAccess } from "../../utils/access";
 import { toPlanDTO } from "./mapper";
 import { PlanFileType } from "@prisma/client";
@@ -84,7 +84,7 @@ chantierPlansRouter.post(
     const plan = await prisma.plan.create({
       data: {
         chantierId: req.params.id,
-        fileName: req.file.originalname,
+        fileName: decodeOriginalFilename(req.file.originalname),
         filePath,
         fileType,
       },

@@ -92,5 +92,6 @@
 .creation-file-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border:1px solid var(--rule);background:var(--paper-2);font-size:12px}
 .creation-file-list li button{border:0;background:transparent;color:var(--ink-muted);display:flex;align-items:center;padding:2px}
 .creation-document-row{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:start;margin-bottom:8px}
+.document-text-preview{margin:0;padding:16px;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,monospace;font-size:12px;line-height:1.5;color:var(--ink)}
 .creation-row-remove{width:36px;height:42px;flex-shrink:0;display:grid;place-items:center;border:1px solid var(--rule);background:var(--paper-2)}
 @media(max-width:700px){.creation-document-row{grid-template-columns:1fr}}
