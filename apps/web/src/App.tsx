@@ -98,7 +98,7 @@ export default function App() {
             <Route path="materiel" element={<ChantierMaterielPage />} />
             <Route path="equipe" element={<ChantierEquipePage />} />
             <Route path="blocages" element={<ChantierBlocagesPage />} />
-            <Route path="rapports" element={<RequireAdmin><ChantierRapportsPage /></RequireAdmin>} />
+            <Route path="rapports" element={<ChantierRapportsPage />} />
             <Route path="historique" element={<ChantierHistoriquePage />} />
           </Route>
         </Route>

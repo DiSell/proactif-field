@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../../config/db";
-import { requireAdmin, requireAuth } from "../../middleware/auth";
+import { requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { absolutePathFor } from "../../utils/storage";
@@ -41,7 +41,6 @@ filesRouter.get(
 
 filesRouter.get(
   "/reports/:id",
-  requireAdmin,
   asyncHandler(async (req, res) => {
     await assertReportAccess(req.params.id, req.auth!);
     const report = await prisma.report.findUnique({ where: { id: req.params.id } });

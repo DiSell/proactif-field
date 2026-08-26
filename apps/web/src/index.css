@@ -77,3 +77,14 @@
 .materiel-card-actions{display:flex;gap:8px;margin-top:10px}
 .materiel-form-quantities{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 @media(max-width:580px){.materiel-form-quantities{grid-template-columns:1fr}}
+
+/* Push notification opt-in banner */
+.push-banner{display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:12px 14px;border:1.5px solid var(--ink);background:var(--accent);color:var(--ink)}
+.push-banner-copy{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.push-banner-copy strong{font-size:13px}
+.push-banner-copy span{font-size:12px}
+.push-banner-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.push-banner-dismiss{width:28px;height:28px;display:grid;place-items:center;border:0;background:transparent;color:var(--ink)}
+@media(max-width:580px){.push-banner{flex-wrap:wrap}.push-banner-actions{width:100%;justify-content:flex-end}}
+
+.creation-subfields{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:-4px 0 12px}

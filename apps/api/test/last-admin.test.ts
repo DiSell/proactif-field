@@ -37,7 +37,7 @@ describe("User deletion — last active admin guard", () => {
     expect(res.status).toBe(204);
   });
 
-  it("refuses to delete your own account regardless of admin count", async () => {
+  it("refuses to delete your own account while other active users remain", async () => {
     const org = await createOrganization();
     orgsToClean.push(org.id);
     const admin1 = await createUser({ organizationId: org.id, role: UserRole.ADMIN });
@@ -46,6 +46,27 @@ describe("User deletion — last active admin guard", () => {
     const res = await request(app).delete(`/api/users/${admin1.id}`).set(authHeader(admin1));
 
     expect(res.status).toBe(400);
+  });
+
+  it("allows self-delete when you are the last active user in the organization", async () => {
+    const org = await createOrganization();
+    orgsToClean.push(org.id);
+    const soleAdmin = await createUser({ organizationId: org.id, role: UserRole.ADMIN });
+
+    const res = await request(app).delete(`/api/users/${soleAdmin.id}`).set(authHeader(soleAdmin));
+
+    expect(res.status).toBe(204);
+  });
+
+  it("still refuses self-delete when an inactive (deactivated) user remains, since a deleted-but-not-anonymized account isn't the concern here — only other ACTIVE users count", async () => {
+    const org = await createOrganization();
+    orgsToClean.push(org.id);
+    const soleAdmin = await createUser({ organizationId: org.id, role: UserRole.ADMIN });
+    await createUser({ organizationId: org.id, role: UserRole.TECHNICIEN, isActive: false });
+
+    const res = await request(app).delete(`/api/users/${soleAdmin.id}`).set(authHeader(soleAdmin));
+
+    expect(res.status).toBe(204);
   });
 
   // The live API can never actually produce this 409: usersRouter requires

@@ -8,10 +8,13 @@ import { toReportDTO } from "./mapper";
 
 const withRelations = { include: { chantier: true, generatedBy: true } } as const;
 
-// Reports are ADMIN-only per the roles spec (TECHNICIENs aren't listed as
-// able to view/download them).
+// Viewable and generatable by anyone with chantier access: a technician
+// finishing an intervention hands the report to the client on the spot, so
+// they need to review and (re)generate it themselves, not wait on an
+// ADMIN. assertChantierAccess still scopes a TECHNICIEN to chantiers
+// they're assigned to. The org-wide /reports screen below stays ADMIN-only.
 export const chantierReportsRouter = Router({ mergeParams: true });
-chantierReportsRouter.use(requireAuth, requireAdmin);
+chantierReportsRouter.use(requireAuth);
 
 chantierReportsRouter.post(
   "/",

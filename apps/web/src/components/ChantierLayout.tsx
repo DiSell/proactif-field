@@ -32,7 +32,7 @@ export default function ChantierLayout() {
     { to: `${base}/materiel`, label: "Matériel" },
     { to: `${base}/equipe`, label: "Équipe" },
     { to: `${base}/blocages`, label: "Blocages" },
-    ...(isAdmin ? [{ to: `${base}/rapports`, label: "Rapports" }] : []),
+    { to: `${base}/rapports`, label: "Rapports" },
     { to: `${base}/historique`, label: "Historique" },
   ];
 

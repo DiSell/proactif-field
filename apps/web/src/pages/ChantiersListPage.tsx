@@ -2,9 +2,11 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChantierDTO, ChantierStatut, UserRole } from "@proactif-field/shared";
 import { useChantiers, useCreateChantier } from "../api/hooks";
+import { apiPostForm, apiPostJson, ApiError } from "../api/client";
 import { useAuthStore } from "../auth/store";
 import AutocompleteInput from "../components/AutocompleteInput";
 import Icon from "../components/Icon";
+import PushNotificationBanner from "../components/PushNotificationBanner";
 import { getSnapshots } from "../offline/db";
 
 type Filter = "TOUS" | "EN_COURS" | "TERMINE";
@@ -21,6 +23,16 @@ export default function ChantiersListPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
+  const [planFile, setPlanFile] = useState<File | null>(null);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [documentCategory, setDocumentCategory] = useState("");
+  const [documentName, setDocumentName] = useState("");
+  const [materielDesignation, setMaterielDesignation] = useState("");
+  const [materielReference, setMaterielReference] = useState("");
+  const [materielQuantitePrevue, setMaterielQuantitePrevue] = useState("");
+  const [materielUnite, setMaterielUnite] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("TOUS");
   const [offlineIds, setOfflineIds] = useState<Set<string>>(new Set());
@@ -39,10 +51,55 @@ export default function ChantiersListPage() {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    await createChantier.mutateAsync({ name, address: address || undefined });
-    setName("");
-    setAddress("");
-    setShowForm(false);
+    if (documentFile && (!documentCategory.trim() || !documentName.trim())) {
+      setCreateError("Catégorie et nom sont requis pour joindre un document.");
+      return;
+    }
+    const hasMaterielDetails = materielReference.trim() || materielQuantitePrevue.trim() || materielUnite.trim();
+    if (hasMaterielDetails && !materielDesignation.trim()) {
+      setCreateError("La désignation est requise pour ajouter une ligne de matériel.");
+      return;
+    }
+    setCreateError(null);
+    setCreating(true);
+    try {
+      const chantier = await createChantier.mutateAsync({ name, address: address || undefined });
+      if (planFile) {
+        const form = new FormData();
+        form.append("file", planFile);
+        await apiPostForm(`/api/chantiers/${chantier.id}/plans`, form);
+      }
+      if (documentFile) {
+        const form = new FormData();
+        form.append("file", documentFile);
+        form.append("category", documentCategory);
+        form.append("name", documentName);
+        await apiPostForm(`/api/chantiers/${chantier.id}/documents`, form);
+      }
+      if (materielDesignation.trim()) {
+        await apiPostJson(`/api/chantiers/${chantier.id}/materiel`, {
+          designation: materielDesignation.trim(),
+          reference: materielReference.trim() || undefined,
+          quantitePrevue: materielQuantitePrevue.trim() === "" ? undefined : Number(materielQuantitePrevue),
+          unite: materielUnite.trim() || undefined,
+        });
+      }
+      setName("");
+      setAddress("");
+      setPlanFile(null);
+      setDocumentFile(null);
+      setDocumentCategory("");
+      setDocumentName("");
+      setMaterielDesignation("");
+      setMaterielReference("");
+      setMaterielQuantitePrevue("");
+      setMaterielUnite("");
+      setShowForm(false);
+    } catch (reason) {
+      setCreateError(reason instanceof ApiError ? reason.message : "Impossible de créer le chantier.");
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -53,6 +110,7 @@ export default function ChantiersListPage() {
       </div>
 
       <div className="page">
+        {!isAdmin && <PushNotificationBanner />}
         <div className="chantier-tools">
           <label className="search-field"><Icon name="search" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un chantier" aria-label="Rechercher un chantier" /></label>
           <button className="btn secondary filter-button" aria-label="Filtrer"><Icon name="filter" /></button>
@@ -65,6 +123,7 @@ export default function ChantiersListPage() {
 
         {showForm && (
           <form onSubmit={submit} className="card">
+            {createError && <div className="error-banner">{createError}</div>}
             <div className="field">
               <label>Nom du chantier</label>
               <AutocompleteInput field="chantier.name" value={name} onChange={setName} required autoFocus />
@@ -73,8 +132,40 @@ export default function ChantiersListPage() {
               <label>Adresse (optionnel)</label>
               <AutocompleteInput field="chantier.address" value={address} onChange={setAddress} />
             </div>
-            <button className="btn block" type="submit" disabled={createChantier.isPending}>
-              Créer
+            <div className="field">
+              <label>Plan initial (optionnel)</label>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg,.svg" onChange={(e) => setPlanFile(e.target.files?.[0] ?? null)} />
+            </div>
+            <div className="field">
+              <label>Document initial (optionnel)</label>
+              <input type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.txt" onChange={(e) => setDocumentFile(e.target.files?.[0] ?? null)} />
+            </div>
+            {documentFile && (
+              <div className="creation-subfields">
+                <div className="field">
+                  <label>Catégorie</label>
+                  <AutocompleteInput field="document.category" value={documentCategory} onChange={setDocumentCategory} placeholder="ex: Plans, Sécurité…" required />
+                </div>
+                <div className="field">
+                  <label>Nom du document</label>
+                  <AutocompleteInput field="document.name" value={documentName} onChange={setDocumentName} required />
+                </div>
+              </div>
+            )}
+            <div className="field">
+              <label>Matériel initial (optionnel)</label>
+              <AutocompleteInput field="materiel.designation" value={materielDesignation} onChange={setMaterielDesignation} placeholder="Désignation" />
+            </div>
+            {materielDesignation.trim() && (
+              <div className="creation-subfields">
+                <div className="field"><label>Référence</label><input value={materielReference} onChange={(e) => setMaterielReference(e.target.value)} maxLength={100} /></div>
+                <div className="field"><label>Quantité prévue</label><input type="number" step="any" min={0} value={materielQuantitePrevue} onChange={(e) => setMaterielQuantitePrevue(e.target.value)} /></div>
+                <div className="field"><label>Unité</label><AutocompleteInput field="materiel.unite" value={materielUnite} onChange={setMaterielUnite} placeholder="m, kg, unités…" /></div>
+              </div>
+            )}
+            <small style={{ color: "var(--ink-muted)" }}>Vous pourrez ajouter d’autres plans, documents et matériel une fois le chantier créé.</small>
+            <button className="btn block" type="submit" disabled={creating}>
+              {creating ? "Création…" : "Créer"}
             </button>
           </form>
         )}

@@ -141,11 +141,9 @@ usersRouter.patch(
 );
 
 // Exported for direct unit testing: through the live API this branch is
-// only reachable indirectly (see test/last-admin.test.ts) because the
-// caller must itself be an active ADMIN distinct from the target, which
-// always keeps the post-deletion count at 1 or more — the one case that
-// really zeroes out active admins (the sole admin deleting themselves) is
-// caught earlier by the self-delete check above, not by this guard.
+// only reachable when an ADMIN deletes a *different* active admin — a
+// self-delete (see below) takes the "am I the last active user at all"
+// path instead, which is a strictly stronger check.
 export async function assertNotLastActiveAdmin(user: { id: string; organizationId: string; role: UserRole; isActive: boolean }): Promise<void> {
   if (user.role !== UserRole.ADMIN || !user.isActive) return;
   const otherActiveAdmins = await prisma.user.count({
@@ -159,8 +157,21 @@ export async function assertNotLastActiveAdmin(user: { id: string; organizationI
 usersRouter.delete("/:id", asyncHandler(async (req, res) => {
   const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
   if (!existing || existing.deletedAt || existing.organizationId !== req.auth!.organizationId) throw new HttpError(404, "Utilisateur introuvable");
-  if (existing.id === req.auth!.userId) throw new HttpError(400, "Impossible de supprimer votre propre compte");
-  await assertNotLastActiveAdmin(existing);
+  if (existing.id === req.auth!.userId) {
+    // Blocking self-delete exists to stop an admin from accidentally
+    // stranding a team that still depends on them. That risk doesn't exist
+    // when nobody else is left in the organization — in that case deleting
+    // yourself just closes an empty account, and there is no other admin
+    // who could ever do it on your behalf (see assertNotLastActiveAdmin).
+    const otherActiveUsers = await prisma.user.count({
+      where: { organizationId: existing.organizationId, isActive: true, deletedAt: null, id: { not: existing.id } },
+    });
+    if (otherActiveUsers > 0) {
+      throw new HttpError(400, "Impossible de supprimer votre propre compte tant que d'autres utilisateurs actifs existent dans l'entreprise");
+    }
+  } else {
+    await assertNotLastActiveAdmin(existing);
+  }
   const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString("base64url"), 10);
   await prisma.$transaction([
     prisma.chantierAssignment.deleteMany({ where: { userId: existing.id } }),
