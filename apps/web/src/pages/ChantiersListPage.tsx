@@ -9,6 +9,8 @@ import Icon from "../components/Icon";
 import PushNotificationBanner from "../components/PushNotificationBanner";
 import { getSnapshots } from "../offline/db";
 
+interface DraftDocument { id: string; file: File | null; category: string; name: string }
+
 type Filter = "TOUS" | "EN_COURS" | "TERMINE";
 const isFinished = (c: ChantierDTO) => [ChantierStatut.TERMINE, ChantierStatut.CLOTURE].includes(c.statut);
 const isStarted = (c: ChantierDTO) => [ChantierStatut.EN_COURS, ChantierStatut.BLOQUE].includes(c.statut);
@@ -23,10 +25,8 @@ export default function ChantiersListPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
-  const [planFile, setPlanFile] = useState<File | null>(null);
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [documentCategory, setDocumentCategory] = useState("");
-  const [documentName, setDocumentName] = useState("");
+  const [planFiles, setPlanFiles] = useState<File[]>([]);
+  const [documents, setDocuments] = useState<DraftDocument[]>([]);
   const [materielDesignation, setMaterielDesignation] = useState("");
   const [materielReference, setMaterielReference] = useState("");
   const [materielQuantitePrevue, setMaterielQuantitePrevue] = useState("");
@@ -48,11 +48,25 @@ export default function ChantiersListPage() {
     return matchesText && (filter === "TOUS" || (filter === "TERMINE" ? isFinished(c) : isStarted(c)));
   });
 
+  function addDocumentRow() {
+    setDocuments((rows) => [...rows, { id: crypto.randomUUID(), file: null, category: "", name: "" }]);
+  }
+  function updateDocumentRow(id: string, patch: Partial<DraftDocument>) {
+    setDocuments((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  }
+  function removeDocumentRow(id: string) {
+    setDocuments((rows) => rows.filter((row) => row.id !== id));
+  }
+  function removePlanFile(index: number) {
+    setPlanFiles((files) => files.filter((_, i) => i !== index));
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    if (documentFile && (!documentCategory.trim() || !documentName.trim())) {
-      setCreateError("Catégorie et nom sont requis pour joindre un document.");
+    const documentsToUpload = documents.filter((doc) => doc.file);
+    if (documentsToUpload.some((doc) => !doc.category.trim() || !doc.name.trim())) {
+      setCreateError("Catégorie et nom sont requis pour chaque document joint.");
       return;
     }
     const hasMaterielDetails = materielReference.trim() || materielQuantitePrevue.trim() || materielUnite.trim();
@@ -64,16 +78,16 @@ export default function ChantiersListPage() {
     setCreating(true);
     try {
       const chantier = await createChantier.mutateAsync({ name, address: address || undefined });
-      if (planFile) {
+      for (const file of planFiles) {
         const form = new FormData();
-        form.append("file", planFile);
+        form.append("file", file);
         await apiPostForm(`/api/chantiers/${chantier.id}/plans`, form);
       }
-      if (documentFile) {
+      for (const doc of documentsToUpload) {
         const form = new FormData();
-        form.append("file", documentFile);
-        form.append("category", documentCategory);
-        form.append("name", documentName);
+        form.append("file", doc.file!);
+        form.append("category", doc.category);
+        form.append("name", doc.name);
         await apiPostForm(`/api/chantiers/${chantier.id}/documents`, form);
       }
       if (materielDesignation.trim()) {
@@ -86,10 +100,8 @@ export default function ChantiersListPage() {
       }
       setName("");
       setAddress("");
-      setPlanFile(null);
-      setDocumentFile(null);
-      setDocumentCategory("");
-      setDocumentName("");
+      setPlanFiles([]);
+      setDocuments([]);
       setMaterielDesignation("");
       setMaterielReference("");
       setMaterielQuantitePrevue("");
@@ -133,25 +145,30 @@ export default function ChantiersListPage() {
               <AutocompleteInput field="chantier.address" value={address} onChange={setAddress} />
             </div>
             <div className="field">
-              <label>Plan initial (optionnel)</label>
-              <input type="file" accept=".pdf,.png,.jpg,.jpeg,.svg" onChange={(e) => setPlanFile(e.target.files?.[0] ?? null)} />
+              <label>Plans initiaux (optionnel)</label>
+              <input type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.svg" onChange={(e) => { const files = Array.from(e.target.files ?? []); setPlanFiles((prev) => [...prev, ...files]); e.target.value = ""; }} />
+              {planFiles.length > 0 && (
+                <ul className="creation-file-list">
+                  {planFiles.map((file, index) => (
+                    <li key={`${file.name}-${index}`}>{file.name}<button type="button" onClick={() => removePlanFile(index)} aria-label={`Retirer ${file.name}`}><Icon name="close" size={12} /></button></li>
+                  ))}
+                </ul>
+              )}
             </div>
             <div className="field">
-              <label>Document initial (optionnel)</label>
-              <input type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.txt" onChange={(e) => setDocumentFile(e.target.files?.[0] ?? null)} />
+              <label>Documents initiaux (optionnel)</label>
             </div>
-            {documentFile && (
-              <div className="creation-subfields">
-                <div className="field">
-                  <label>Catégorie</label>
-                  <AutocompleteInput field="document.category" value={documentCategory} onChange={setDocumentCategory} placeholder="ex: Plans, Sécurité…" required />
-                </div>
-                <div className="field">
-                  <label>Nom du document</label>
-                  <AutocompleteInput field="document.name" value={documentName} onChange={setDocumentName} required />
-                </div>
+            {documents.map((doc) => (
+              <div key={doc.id} className="creation-document-row">
+                <input type="file" accept=".pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.txt" onChange={(e) => updateDocumentRow(doc.id, { file: e.target.files?.[0] ?? null })} />
+                <AutocompleteInput field="document.category" value={doc.category} onChange={(value) => updateDocumentRow(doc.id, { category: value })} placeholder="Catégorie" />
+                <AutocompleteInput field="document.name" value={doc.name} onChange={(value) => updateDocumentRow(doc.id, { name: value })} placeholder="Nom du document" />
+                <button type="button" className="creation-row-remove" onClick={() => removeDocumentRow(doc.id)} aria-label="Retirer ce document"><Icon name="close" size={14} /></button>
               </div>
-            )}
+            ))}
+            <button type="button" className="btn secondary" style={{ marginBottom: 16 }} onClick={addDocumentRow}>
+              <Icon name="plus" /> Ajouter un document
+            </button>
             <div className="field">
               <label>Matériel initial (optionnel)</label>
               <AutocompleteInput field="materiel.designation" value={materielDesignation} onChange={setMaterielDesignation} placeholder="Désignation" />
