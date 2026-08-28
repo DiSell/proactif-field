@@ -30,12 +30,67 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
   const viewerRef = useRef<HTMLDivElement>(null);
   const [pointsVisible, setPointsVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [rotation, setRotation] = useState(0);
+  // Non-null only while a 2-finger twist is actively in progress, so the
+  // plan follows the fingers 1:1 without the snap transition fighting it.
+  const [liveRotation, setLiveRotation] = useState<number | null>(null);
+  const displayRotation = liveRotation ?? rotation;
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === viewerRef.current);
     document.addEventListener("fullscreenchange", onFullscreenChange);
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
+
+  // Rotation is a view-only convenience (not saved), so it doesn't carry
+  // over confusingly to the next plan you open.
+  useEffect(() => setRotation(0), [plan.id]);
+
+  // Two-finger twist to rotate on touch devices, alongside the toolbar
+  // button. Listens passively (no preventDefault) so it never interferes
+  // with react-zoom-pan-pinch's own pinch-to-zoom/pan handling on the same
+  // touches — this only reads the angle between the two touch points, it
+  // doesn't consume the gesture. Snaps to the nearest 90° on release, same
+  // as the button, so counter-rotated markers/labels never end up askew.
+  useEffect(() => {
+    const el = viewerRef.current;
+    if (!el) return;
+
+    let gesture: { startAngle: number; baseRotation: number } | null = null;
+    const angleBetween = (a: Touch, b: Touch) => Math.atan2(b.clientY - a.clientY, b.clientX - a.clientX) * (180 / Math.PI);
+
+    function onTouchStart(e: TouchEvent) {
+      if (e.touches.length === 2) {
+        gesture = { startAngle: angleBetween(e.touches[0], e.touches[1]), baseRotation: rotation };
+      }
+    }
+    function onTouchMove(e: TouchEvent) {
+      if (e.touches.length === 2 && gesture) {
+        const delta = angleBetween(e.touches[0], e.touches[1]) - gesture.startAngle;
+        setLiveRotation(gesture.baseRotation + delta);
+      }
+    }
+    function onTouchEnd(e: TouchEvent) {
+      if (e.touches.length < 2 && gesture) {
+        gesture = null;
+        setLiveRotation((current) => {
+          if (current != null) setRotation(((Math.round(current / 90) * 90) % 360 + 360) % 360);
+          return null;
+        });
+      }
+    }
+
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchEnd);
+    };
+  }, [rotation]);
 
   async function toggleFullscreen() {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -56,9 +111,9 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
   return (
     <div className="plan-viewer" ref={viewerRef}>
       <TransformWrapper initialScale={1} minScale={0.3} maxScale={6} centerOnInit doubleClick={{ mode: "toggle" }}>
-        <PlanToolbar plan={plan} plans={plans} pointsVisible={pointsVisible} isFullscreen={isFullscreen} onPlanChange={onPlanChange} onTogglePoints={() => setPointsVisible((visible) => !visible)} onToggleFullscreen={toggleFullscreen} onAddPlan={onAddPlan} />
+        <PlanToolbar plan={plan} plans={plans} pointsVisible={pointsVisible} isFullscreen={isFullscreen} rotation={rotation} onPlanChange={onPlanChange} onTogglePoints={() => setPointsVisible((visible) => !visible)} onToggleFullscreen={toggleFullscreen} onRotate={() => setRotation((r) => (r + 90) % 360)} onAddPlan={onAddPlan} />
         <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-          <div className="plan-content" ref={contentRef} onClick={handleContentClick}>
+          <div className="plan-content" ref={contentRef} onClick={handleContentClick} style={{ transform: displayRotation ? `rotate(${displayRotation}deg)` : undefined, transitionDuration: liveRotation != null ? "0s" : undefined }}>
             {plan.fileType === "PDF" ? (
               <PdfPage planId={plan.id} />
             ) : (
@@ -72,14 +127,19 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
                 <line className="cross" x1={blocage.endX! * 100 + 1.8} y1={blocage.endY! * 100 - 1.8} x2={blocage.endX! * 100 - 1.8} y2={blocage.endY! * 100 + 1.8} />
               </g>)}
             </svg>
-            {blocages.filter((blocage) => blocage.distanceMeters != null && blocage.startX != null && blocage.startY != null && blocage.endX != null && blocage.endY != null).map((blocage) => <span key={`distance-${blocage.id}`} className="blocage-distance" style={{ left: `${((blocage.startX! + blocage.endX!) / 2) * 100}%`, top: `${((blocage.startY! + blocage.endY!) / 2) * 100}%` }}>{blocage.distanceMeters!.toFixed(1)} m</span>)}
+            {blocages.filter((blocage) => blocage.distanceMeters != null && blocage.startX != null && blocage.startY != null && blocage.endX != null && blocage.endY != null).map((blocage) => <span key={`distance-${blocage.id}`} className="blocage-distance" style={{ left: `${((blocage.startX! + blocage.endX!) / 2) * 100}%`, top: `${((blocage.startY! + blocage.endY!) / 2) * 100}%`, transform: displayRotation ? `translate(-50%, -50%) rotate(${-displayRotation}deg)` : undefined }}>{blocage.distanceMeters!.toFixed(1)} m</span>)}
             {pointsVisible && points.map((point) => (
-              <PointMarker key={point.id} point={point} selected={point.id === selectedPointId} onClick={() => placingBlockageStart ? onPlaceBlockageStart?.(point.x, point.y) : onSelectPoint(point)} />
+              <PointMarker key={point.id} point={point} selected={point.id === selectedPointId} rotation={displayRotation} onClick={() => placingBlockageStart ? onPlaceBlockageStart?.(point.x, point.y) : onSelectPoint(point)} />
             ))}
-            {placingBlockageStart && <div className="blocage-placement-hint">Touchez le départ A sur le plan</div>}
           </div>
         </TransformComponent>
       </TransformWrapper>
+      {/* Rendered outside the pannable/zoomable/rotatable .plan-content so it
+          stays put on screen as a real banner, instead of moving/rotating
+          with the plan and ending up wherever the current transform happens
+          to place it (it used to sit inside .plan-content, right on top of
+          the marker). */}
+      {placingBlockageStart && <div className="blocage-placement-hint">Touchez le départ A sur le plan</div>}
     </div>
   );
 }

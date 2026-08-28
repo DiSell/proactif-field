@@ -115,7 +115,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
   }
 
   return (
-    <div className={`sheet-overlay ${displayMode === "panel" ? "point-panel-overlay" : ""}`} style={hidden ? { display: "none" } : undefined} onClick={onClose}>
+    <div className={`sheet-overlay ${displayMode === "panel" ? "point-panel-overlay" : ""} ${hidden ? "point-panel-hidden" : ""}`} onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-header">
           <div><div className="section-title" style={{ margin: 0 }}>Point {point.identifiant}</div><h2 style={{ margin: 0 }}>{nom || type || "Fiche du point"}</h2></div>

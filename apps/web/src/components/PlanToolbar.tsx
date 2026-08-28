@@ -7,13 +7,15 @@ interface Props {
   plans: PlanDTO[];
   pointsVisible: boolean;
   isFullscreen: boolean;
+  rotation: number;
   onPlanChange: (planId: string) => void;
   onTogglePoints: () => void;
   onToggleFullscreen: () => void;
+  onRotate: () => void;
   onAddPlan?: () => void;
 }
 
-export default function PlanToolbar({ plan, plans, pointsVisible, isFullscreen, onPlanChange, onTogglePoints, onToggleFullscreen, onAddPlan }: Props) {
+export default function PlanToolbar({ plan, plans, pointsVisible, isFullscreen, rotation, onPlanChange, onTogglePoints, onToggleFullscreen, onRotate, onAddPlan }: Props) {
   const { zoomIn, zoomOut, resetTransform } = useControls();
 
   return <div className="plan-toolbar" role="toolbar" aria-label="Outils du plan">
@@ -26,6 +28,7 @@ export default function PlanToolbar({ plan, plans, pointsVisible, isFullscreen, 
       <button className="plan-tool-zoom-out" onClick={() => zoomOut()} title="Zoom arrière" aria-label="Zoom arrière"><Icon name="zoom-out" /></button>
       <button className="plan-tool-zoom-in" onClick={() => zoomIn()} title="Zoom avant" aria-label="Zoom avant"><Icon name="zoom-in" /></button>
       <button className="plan-tool-reset" onClick={() => resetTransform()} title="Recentrer le plan" aria-label="Recentrer le plan"><Icon name="locate" /></button>
+      <button className="plan-tool-rotate" onClick={onRotate} title="Pivoter de 90°" aria-label="Pivoter le plan de 90°"><Icon name="rotate" /></button>
       <button className={`plan-tool-points ${pointsVisible ? "active" : ""}`} onClick={onTogglePoints} title={pointsVisible ? "Masquer les points" : "Afficher les points"} aria-label={pointsVisible ? "Masquer les points" : "Afficher les points"} aria-pressed={pointsVisible}><Icon name="eye" /></button>
       <button className="plan-tool-fullscreen" onClick={onToggleFullscreen} title={isFullscreen ? "Quitter le plein écran" : "Afficher en plein écran"} aria-label={isFullscreen ? "Quitter le plein écran" : "Afficher en plein écran"}><span className="fullscreen-icon">{isFullscreen ? "↙" : "↗"}</span></button>
     </div>
