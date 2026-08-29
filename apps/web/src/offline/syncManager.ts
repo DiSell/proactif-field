@@ -55,7 +55,7 @@ export async function trySync(): Promise<void> {
         break;
       }
     }
-    for (const photo of await getPendingPhotos()) {
+    for (const photo of await getPendingPhotos(user.id)) {
       try {
         await apiPostForm<{ photo: PhotoDTO }>(`/api/points/${photo.pointId}/photos`, photoForm(photo as unknown as Record<string, unknown>));
         await removePendingPhoto(photo.id);

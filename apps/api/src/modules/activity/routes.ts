@@ -38,3 +38,28 @@ chantierActivityRouter.get(
     });
   })
 );
+
+export const activityRouter = Router();
+activityRouter.use(requireAuth);
+activityRouter.get(
+  "/",
+  asyncHandler(async (req, res) => {
+    const { take, cursor } = querySchema.parse(req.query);
+    const entries = await prisma.activityLog.findMany({
+      where: {
+        organizationId: req.auth!.organizationId,
+        ...(req.auth!.role === "TECHNICIEN" ? { chantier: { assignments: { some: { userId: req.auth!.userId } } } } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: take + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: { user: { select: { name: true } }, chantier: { select: { name: true, reference: true } } },
+    });
+    const hasMore = entries.length > take;
+    const page = hasMore ? entries.slice(0, take) : entries;
+    res.json({
+      activities: page.map((entry) => ({ ...toActivityLogDTO(entry), chantierName: entry.chantier.name, chantierReference: entry.chantier.reference })),
+      nextCursor: hasMore ? page[page.length - 1].id : null,
+    });
+  })
+);

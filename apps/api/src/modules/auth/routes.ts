@@ -24,6 +24,12 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+const ownProfileSchema = z.object({
+  name: z.string().trim().min(1).max(160).optional(),
+  phone: z.string().trim().max(40).nullable().optional(),
+  employerCompany: z.string().trim().max(160).nullable().optional(),
+});
+
 authRouter.get("/invitations/:token", asyncHandler(async (req, res) => {
   const user = await prisma.user.findUnique({ where: { inviteTokenHash: hashInvitationToken(req.params.token) }, include: { organization: { select: { name: true } } } });
   if (!user || user.invitationAcceptedAt || !user.inviteExpiresAt || user.inviteExpiresAt <= new Date()) throw new HttpError(404, "Invitation invalide ou expirée");
@@ -73,6 +79,16 @@ authRouter.get(
     if (!user) {
       throw new HttpError(404, "Utilisateur introuvable");
     }
+    res.json({ user: toUserDTO(user) });
+  })
+);
+
+authRouter.patch(
+  "/me",
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const input = ownProfileSchema.parse(req.body);
+    const user = await prisma.user.update({ where: { id: req.auth!.userId }, data: input });
     res.json({ user: toUserDTO(user) });
   })
 );

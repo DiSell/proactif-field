@@ -26,7 +26,7 @@ export async function refreshAssignedSnapshots(chantiers: ChantierDTO[]): Promis
     if (old) {
       await deleteCachedChantierFiles(user.id, old.plans.map((plan) => plan.id), old.photos.map((photo) => photo.id));
       const planIds = new Set(old.plans.map((plan) => plan.id));
-      await Promise.all((await getPendingPhotos()).filter((photo) => planIds.has(photo.planId)).map((photo) => removePendingPhoto(photo.id)));
+      await Promise.all((await getPendingPhotos(user.id)).filter((photo) => planIds.has(photo.planId)).map((photo) => removePendingPhoto(photo.id)));
     }
     await Promise.all((await getOperations(user.id)).filter((operation) => operation.chantierId === chantierId).map((operation) => removeOperation(operation.id)));
   }

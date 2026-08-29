@@ -294,6 +294,7 @@ model Blocage {
   startY          Float?
   endX            Float?
   endY            Float?
+  flexionPoints   Json             @default("[]")
   startGpsLat     Float?
   startGpsLng     Float?
   startGpsAccuracy Float?

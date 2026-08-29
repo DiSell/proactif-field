@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { BlocageDTO, BlocageStatut, PlanDTO, PointDTO } from "@proactif-field/shared";
+import { BlocageDTO, BlocageStatut, BlocageTracePoint, PlanDTO, PointDTO } from "@proactif-field/shared";
 import { apiFetchArrayBuffer } from "../api/client";
 import { useFileObjectUrl } from "../api/files";
 import PointMarker from "./PointMarker";
@@ -23,9 +23,35 @@ interface Props {
   blocages?: BlocageDTO[];
   placingBlockageStart?: boolean;
   onPlaceBlockageStart?: (x: number, y: number) => void;
+  placingFlexion?: boolean;
+  onPlaceFlexion?: (x: number, y: number) => void;
+  draftTrace?: { start: { x: number; y: number }; flexions: BlocageTracePoint[]; end: { x: number; y: number } } | null;
 }
 
-export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint, canCreatePoint = true, plans = [plan], selectedPointId, onPlanChange = () => undefined, onAddPlan, blocages = [], placingBlockageStart = false, onPlaceBlockageStart }: Props) {
+type TraceCoordinate = { x: number; y: number };
+
+function smoothTracePath(points: TraceCoordinate[]): string {
+  if (points.length < 2) return "";
+  const scaled = points.map((point) => ({ x: point.x * 100, y: point.y * 100 }));
+  let path = `M ${scaled[0].x} ${scaled[0].y}`;
+  for (let index = 0; index < scaled.length - 1; index += 1) {
+    const previous = scaled[Math.max(0, index - 1)];
+    const current = scaled[index];
+    const next = scaled[index + 1];
+    const after = scaled[Math.min(scaled.length - 1, index + 2)];
+    const control1 = { x: current.x + (next.x - previous.x) / 6, y: current.y + (next.y - previous.y) / 6 };
+    const control2 = { x: next.x - (after.x - current.x) / 6, y: next.y - (after.y - current.y) / 6 };
+    path += ` C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${next.x} ${next.y}`;
+  }
+  return path;
+}
+
+function blocageTrace(blocage: BlocageDTO): TraceCoordinate[] {
+  if (blocage.startX == null || blocage.startY == null || blocage.endX == null || blocage.endY == null) return [];
+  return [{ x: blocage.startX, y: blocage.startY }, ...(blocage.flexionPoints ?? []), { x: blocage.endX, y: blocage.endY }];
+}
+
+export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint, canCreatePoint = true, plans = [plan], selectedPointId, onPlanChange = () => undefined, onAddPlan, blocages = [], placingBlockageStart = false, onPlaceBlockageStart, placingFlexion = false, onPlaceFlexion, draftTrace = null }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const [pointsVisible, setPointsVisible] = useState(true);
@@ -104,6 +130,7 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
     const y = (e.clientY - rect.top) / rect.height;
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
     if (placingBlockageStart) { onPlaceBlockageStart?.(x, y); return; }
+    if (placingFlexion) { onPlaceFlexion?.(x, y); return; }
     if (!canCreatePoint) return;
     onCreatePoint(x, y);
   }
@@ -120,16 +147,18 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
               <PlanImage planId={plan.id} />
             )}
             <svg className="blocage-traces" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-              {blocages.filter((blocage) => blocage.startX != null && blocage.startY != null && blocage.endX != null && blocage.endY != null).map((blocage) => <g key={blocage.id} className={blocage.statut === BlocageStatut.OUVERT ? "open" : "resolved"}>
-                <line x1={blocage.startX! * 100} y1={blocage.startY! * 100} x2={blocage.endX! * 100} y2={blocage.endY! * 100} />
+              {blocages.filter((blocage) => blocageTrace(blocage).length > 1).map((blocage) => <g key={blocage.id} className={blocage.statut === BlocageStatut.OUVERT ? "open" : "resolved"}>
+                <path d={smoothTracePath(blocageTrace(blocage))} fill="none" />
                 <circle cx={blocage.startX! * 100} cy={blocage.startY! * 100} r="1.5" />
+                {(blocage.flexionPoints ?? []).map((flexion, index) => <circle key={index} className="flexion" cx={flexion.x * 100} cy={flexion.y * 100} r="1" />)}
                 <line className="cross" x1={blocage.endX! * 100 - 1.8} y1={blocage.endY! * 100 - 1.8} x2={blocage.endX! * 100 + 1.8} y2={blocage.endY! * 100 + 1.8} />
                 <line className="cross" x1={blocage.endX! * 100 + 1.8} y1={blocage.endY! * 100 - 1.8} x2={blocage.endX! * 100 - 1.8} y2={blocage.endY! * 100 + 1.8} />
               </g>)}
+              {draftTrace && <g className="draft"><path d={smoothTracePath([draftTrace.start, ...draftTrace.flexions, draftTrace.end])} fill="none" />{draftTrace.flexions.map((flexion, index) => <circle key={index} className="flexion" cx={flexion.x * 100} cy={flexion.y * 100} r="1" />)}</g>}
             </svg>
             {blocages.filter((blocage) => blocage.distanceMeters != null && blocage.startX != null && blocage.startY != null && blocage.endX != null && blocage.endY != null).map((blocage) => <span key={`distance-${blocage.id}`} className="blocage-distance" style={{ left: `${((blocage.startX! + blocage.endX!) / 2) * 100}%`, top: `${((blocage.startY! + blocage.endY!) / 2) * 100}%`, transform: displayRotation ? `translate(-50%, -50%) rotate(${-displayRotation}deg)` : undefined }}>{blocage.distanceMeters!.toFixed(1)} m</span>)}
             {pointsVisible && points.map((point) => (
-              <PointMarker key={point.id} point={point} selected={point.id === selectedPointId} rotation={displayRotation} onClick={() => placingBlockageStart ? onPlaceBlockageStart?.(point.x, point.y) : onSelectPoint(point)} />
+              <PointMarker key={point.id} point={point} selected={point.id === selectedPointId} rotation={displayRotation} onClick={() => placingBlockageStart ? onPlaceBlockageStart?.(point.x, point.y) : placingFlexion ? onPlaceFlexion?.(point.x, point.y) : onSelectPoint(point)} />
             ))}
           </div>
         </TransformComponent>
@@ -139,7 +168,7 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
           with the plan and ending up wherever the current transform happens
           to place it (it used to sit inside .plan-content, right on top of
           the marker). */}
-      {placingBlockageStart && <div className="blocage-placement-hint">Touchez le départ A sur le plan</div>}
+      {(placingBlockageStart || placingFlexion) && <div className="blocage-placement-hint">{placingFlexion ? "Touchez le plan pour placer la flexion" : "Touchez le départ A sur le plan"}</div>}
     </div>
   );
 }

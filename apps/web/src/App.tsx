@@ -23,6 +23,8 @@ import AdminEntreprisePage from "./pages/AdminEntreprisePage";
 import AdminParametresPage from "./pages/AdminParametresPage";
 import ReportsPage from "./pages/ReportsPage";
 import ActivateAccountPage from "./pages/ActivateAccountPage";
+import TechnicianAccountPage from "./pages/TechnicianAccountPage";
+import TechnicianHistoryPage from "./pages/TechnicianHistoryPage";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
@@ -38,6 +40,14 @@ function RequireAdmin({ children }: { children: JSX.Element }) {
   return children;
 }
 
+function RequireTechnician({ children }: { children: JSX.Element }) {
+  const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
+  if (!token) return <Navigate to="/login" replace />;
+  if (user?.role !== UserRole.TECHNICIEN) return <Navigate to="/" replace />;
+  return children;
+}
+
 function SyncBanner() {
   const [pendingCount, setPendingCount] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
@@ -46,7 +56,7 @@ function SyncBanner() {
 
   useEffect(() => {
     const refresh = () => {
-      Promise.all([getPendingPhotos(), getOperations(userId)]).then(([photos, operations]) => setPendingCount(photos.length + operations.length));
+      Promise.all([userId ? getPendingPhotos(userId) : Promise.resolve([]), getOperations(userId)]).then(([photos, operations]) => setPendingCount(photos.length + operations.length));
       setLastError(getLastSyncError());
       setOnline(navigator.onLine);
     };
@@ -89,6 +99,8 @@ export default function App() {
           <Route path="/admin/entreprise" element={<RequireAdmin><AdminEntreprisePage /></RequireAdmin>} />
           <Route path="/admin/parametres" element={<RequireAdmin><AdminParametresPage /></RequireAdmin>} />
           <Route path="/reports" element={<RequireAdmin><ReportsPage /></RequireAdmin>} />
+          <Route path="/mon-compte" element={<RequireTechnician><TechnicianAccountPage /></RequireTechnician>} />
+          <Route path="/historique" element={<RequireTechnician><TechnicianHistoryPage /></RequireTechnician>} />
 
           <Route path="/chantiers/:chantierId" element={<ChantierLayout />}>
             <Route index element={<ChantierOverviewPage />} />

@@ -68,7 +68,6 @@ chantierPlansRouter.get(
 
 chantierPlansRouter.post(
   "/",
-  requireAdmin,
   uploadPlan.single("file"),
   asyncHandler(async (req, res) => {
     await assertChantierAccess(req.params.id, req.auth!);

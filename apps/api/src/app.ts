@@ -18,7 +18,7 @@ import { dashboardRouter } from "./modules/dashboard/routes";
 import { blocagesRouter, chantierBlocagesRouter, pointBlocagesRouter } from "./modules/blocages/routes";
 import { pushRouter } from "./modules/push/routes";
 import { organizationRouter } from "./modules/organization/routes";
-import { chantierActivityRouter } from "./modules/activity/routes";
+import { activityRouter, chantierActivityRouter } from "./modules/activity/routes";
 import { chantierMaterielRouter, materielRouter } from "./modules/materiel/routes";
 
 export function createApp() {
@@ -38,6 +38,7 @@ export function createApp() {
   app.use("/api/chantiers/:id/documents", chantierDocumentsRouter);
   app.use("/api/chantiers/:id/blocages", chantierBlocagesRouter);
   app.use("/api/chantiers/:id/activity", chantierActivityRouter);
+  app.use("/api/activity", activityRouter);
   app.use("/api/chantiers/:id/materiel", chantierMaterielRouter);
   app.use("/api/materiel", materielRouter);
   app.use("/api/documents", documentsRouter);

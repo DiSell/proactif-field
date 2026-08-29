@@ -21,6 +21,7 @@ export default function ChantiersListPage() {
   const createChantier = useCreateChantier();
   const user = useAuthStore((s) => s.user);
   const isAdmin = user?.role === UserRole.ADMIN;
+  const isTechnician = user?.role === UserRole.TECHNICIEN;
 
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
@@ -34,7 +35,7 @@ export default function ChantiersListPage() {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<Filter>("TOUS");
+  const [filter, setFilter] = useState<Filter>(isTechnician ? "EN_COURS" : "TOUS");
   const [offlineIds, setOfflineIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (!user || isAdmin) return;
@@ -45,7 +46,10 @@ export default function ChantiersListPage() {
   }, [user, isAdmin, chantiers]);
   const visible = (chantiers ?? []).filter((c) => {
     const matchesText = `${c.name} ${c.reference} ${c.address ?? ""}`.toLowerCase().includes(search.toLowerCase());
-    return matchesText && (filter === "TOUS" || (filter === "TERMINE" ? isFinished(c) : isStarted(c)));
+    const matchesFolder = filter === "TOUS"
+      || (filter === "EN_COURS" && (isAdmin ? isStarted(c) : !isFinished(c)))
+      || (filter === "TERMINE" && isFinished(c));
+    return matchesText && matchesFolder;
   });
 
   function addDocumentRow() {
@@ -70,14 +74,16 @@ export default function ChantiersListPage() {
       return;
     }
     const hasMaterielDetails = materielReference.trim() || materielQuantitePrevue.trim() || materielUnite.trim();
-    if (hasMaterielDetails && !materielDesignation.trim()) {
+    if (isAdmin && hasMaterielDetails && !materielDesignation.trim()) {
       setCreateError("La désignation est requise pour ajouter une ligne de matériel.");
       return;
     }
     setCreateError(null);
     setCreating(true);
+    let createdChantier: ChantierDTO | null = null;
     try {
       const chantier = await createChantier.mutateAsync({ name, address: address || undefined });
+      createdChantier = chantier;
       for (const file of planFiles) {
         const form = new FormData();
         form.append("file", file);
@@ -90,7 +96,7 @@ export default function ChantiersListPage() {
         form.append("name", doc.name);
         await apiPostForm(`/api/chantiers/${chantier.id}/documents`, form);
       }
-      if (materielDesignation.trim()) {
+      if (isAdmin && materielDesignation.trim()) {
         await apiPostJson(`/api/chantiers/${chantier.id}/materiel`, {
           designation: materielDesignation.trim(),
           reference: materielReference.trim() || undefined,
@@ -108,7 +114,16 @@ export default function ChantiersListPage() {
       setMaterielUnite("");
       setShowForm(false);
     } catch (reason) {
-      setCreateError(reason instanceof ApiError ? reason.message : "Impossible de créer le chantier.");
+      const detail = reason instanceof ApiError ? reason.message : "Erreur inattendue";
+      if (createdChantier) {
+        navigate(`/chantiers/${createdChantier.id}`, {
+          state: {
+            creationWarning: `Le chantier ${createdChantier.reference} a bien été créé, mais certains éléments initiaux n'ont pas pu être ajoutés : ${detail}. Vous pouvez compléter le dossier depuis ses onglets.`,
+          },
+        });
+      } else {
+        setCreateError(detail || "Impossible de créer le chantier.");
+      }
     } finally {
       setCreating(false);
     }
@@ -117,7 +132,7 @@ export default function ChantiersListPage() {
   return (
     <>
       <div className="topbar">
-        <h1>Chantiers</h1>
+        <h1>{isTechnician ? "Mes chantiers" : "Chantiers"}</h1>
         <div style={{ width: 1 }} />
       </div>
 
@@ -125,12 +140,17 @@ export default function ChantiersListPage() {
         {!isAdmin && <PushNotificationBanner />}
         <div className="chantier-tools">
           <label className="search-field"><Icon name="search" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un chantier" aria-label="Rechercher un chantier" /></label>
-          <button className="btn secondary filter-button" aria-label="Filtrer"><Icon name="filter" /></button>
+          <button
+            className="btn secondary filter-button"
+            aria-label="Changer le filtre de statut"
+            onClick={() => setFilter(isTechnician ? (filter === "EN_COURS" ? "TERMINE" : "EN_COURS") : (filter === "TOUS" ? "EN_COURS" : filter === "EN_COURS" ? "TERMINE" : "TOUS"))}
+          ><Icon name="filter" /></button>
         </div>
         <div className="filter-chips">
-          <button className={filter === "TOUS" ? "active" : ""} onClick={() => setFilter("TOUS")}>Tous · {chantiers?.length ?? 0}</button>
-          <button className={filter === "EN_COURS" ? "active" : ""} onClick={() => setFilter("EN_COURS")}><span className="status-dot ORANGE" /> En cours · {(chantiers ?? []).filter(isStarted).length}</button>
+          {isAdmin && <button className={filter === "TOUS" ? "active" : ""} onClick={() => setFilter("TOUS")}>Tous · {chantiers?.length ?? 0}</button>}
+          <button className={filter === "EN_COURS" ? "active" : ""} onClick={() => setFilter("EN_COURS")}><span className="status-dot ORANGE" /> En cours · {(chantiers ?? []).filter((chantier) => isAdmin ? isStarted(chantier) : !isFinished(chantier)).length}</button>
           <button className={filter === "TERMINE" ? "active" : ""} onClick={() => setFilter("TERMINE")}><span className="status-dot VERT" /> Terminés · {(chantiers ?? []).filter(isFinished).length}</button>
+          {isTechnician && <button className={showForm ? "active" : ""} onClick={() => setShowForm((open) => !open)}><Icon name="plus" size={14} /> Nouveau chantier</button>}
         </div>
 
         {showForm && (
@@ -169,7 +189,7 @@ export default function ChantiersListPage() {
             <button type="button" className="btn secondary" style={{ marginBottom: 16 }} onClick={addDocumentRow}>
               <Icon name="plus" /> Ajouter un document
             </button>
-            <div className="field">
+            {isAdmin && <><div className="field">
               <label>Matériel initial (optionnel)</label>
               <AutocompleteInput field="materiel.designation" value={materielDesignation} onChange={setMaterielDesignation} placeholder="Désignation" />
             </div>
@@ -179,7 +199,7 @@ export default function ChantiersListPage() {
                 <div className="field"><label>Quantité prévue</label><input type="number" step="any" min={0} value={materielQuantitePrevue} onChange={(e) => setMaterielQuantitePrevue(e.target.value)} /></div>
                 <div className="field"><label>Unité</label><AutocompleteInput field="materiel.unite" value={materielUnite} onChange={setMaterielUnite} placeholder="m, kg, unités…" /></div>
               </div>
-            )}
+            )}</>}
             <small style={{ color: "var(--ink-muted)" }}>Vous pourrez ajouter d’autres plans, documents et matériel une fois le chantier créé.</small>
             <button className="btn block" type="submit" disabled={creating}>
               {creating ? "Création…" : "Créer"}
@@ -189,6 +209,7 @@ export default function ChantiersListPage() {
 
         {isLoading && <p>Chargement…</p>}
         {chantiers?.length === 0 && <div className="empty-state"><Icon name="chantier" size={40} /><p>Aucun chantier pour le moment.</p>{isAdmin && <button className="btn" onClick={() => setShowForm(true)}><Icon name="plus" /> Créer un chantier</button>}</div>}
+        {!isLoading && (chantiers?.length ?? 0) > 0 && visible.length === 0 && <div className="empty-state"><Icon name="chantier" size={40} /><p>{search ? "Aucun chantier ne correspond à la recherche." : filter === "TERMINE" ? "Aucun chantier terminé." : "Aucun chantier en cours."}</p></div>}
         {visible.map((c) => (
           <Link key={c.id} to={`/chantiers/${c.id}`} className="card-link">
             <div className={`card chantier-card ${isFinished(c) ? "finished" : isStarted(c) ? "started" : "pending"}`}>
@@ -202,7 +223,7 @@ export default function ChantiersListPage() {
             </div>
           </Link>
         ))}
-        {isAdmin && <div className="sticky-create"><button className="btn block" onClick={() => setShowForm((v) => !v)}><Icon name={showForm ? "close" : "plus"} />{showForm ? "Annuler" : "Nouveau chantier"}</button></div>}
+        {(isAdmin || isTechnician) && <div className="sticky-create"><button className="btn block" onClick={() => setShowForm((v) => !v)}><Icon name={showForm ? "close" : "plus"} />{showForm ? "Annuler" : "Nouveau chantier"}</button></div>}
       </div>
     </>
   );

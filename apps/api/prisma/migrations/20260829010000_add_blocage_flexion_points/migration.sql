@@ -1,0 +1,2 @@
+ALTER TABLE "Blocage"
+ADD COLUMN "flexionPoints" JSONB NOT NULL DEFAULT '[]';

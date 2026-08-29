@@ -23,6 +23,7 @@ import {
   UserDTO,
   OrganizationDTO,
   UpdateOrganizationInput,
+  UpdateOwnProfileInput,
 } from "@proactif-field/shared";
 import { apiDelete, apiGet, apiPatchJson, apiPostForm, apiPostJson } from "./client";
 import { currentSnapshot, currentSnapshots, refreshAssignedSnapshots, refreshChantierSnapshot } from "../offline/snapshots";
@@ -229,6 +230,19 @@ export function useChantierActivity(chantierId: string | undefined, cursor: stri
         `/api/chantiers/${chantierId}/activity${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`
       ),
     enabled: !!chantierId,
+  });
+}
+
+export function useGlobalActivity(cursor: string | null) {
+  return useQuery({
+    queryKey: ["activity", cursor ?? "first"],
+    queryFn: () => apiGet<ActivityLogPageDTO>(`/api/activity${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`),
+  });
+}
+
+export function useUpdateOwnProfile() {
+  return useMutation({
+    mutationFn: (input: UpdateOwnProfileInput) => apiPatchJson<{ user: UserDTO }>("/api/auth/me", input).then((result) => result.user),
   });
 }
 

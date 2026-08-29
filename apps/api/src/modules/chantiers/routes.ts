@@ -17,14 +17,20 @@ import { toMaterielDTO } from "../materiel/mapper";
 
 const withAssignments = { include: { assignments: true, responsable: true } } as const;
 
-// Simple per-organization sequential reference (CH-0001, CH-0002, ...),
-// matching the scheme used to backfill pre-existing chantiers. Not
-// concurrency-safe against two simultaneous creates in the same org, which
-// is an acceptable tradeoff at this scale (an ADMIN creating chantiers
-// one at a time).
+// References are never reused after a deletion. Looking at the highest
+// numeric suffix also avoids the count+1 collision (CH-0001 deleted while
+// CH-0002 still exists). The unique database constraint remains the final
+// guard against two concurrent creations.
 async function nextChantierReference(organizationId: string): Promise<string> {
-  const count = await prisma.chantier.count({ where: { organizationId } });
-  return `CH-${String(count + 1).padStart(4, "0")}`;
+  const references = await prisma.chantier.findMany({
+    where: { organizationId, reference: { startsWith: "CH-" } },
+    select: { reference: true },
+  });
+  const highest = references.reduce((max, { reference }) => {
+    const match = /^CH-(\d+)$/.exec(reference);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  return `CH-${String(highest + 1).padStart(4, "0")}`;
 }
 
 export const chantiersRouter = Router();
@@ -97,10 +103,10 @@ chantiersRouter.get(
 
 chantiersRouter.post(
   "/",
-  requireAdmin,
   asyncHandler(async (req, res) => {
     const input = createSchema.parse(req.body);
-    const organizationId = req.auth!.organizationId;
+    const auth = req.auth!;
+    const organizationId = auth.organizationId;
     await assertResponsableInOrg(input.responsableId, organizationId);
     const reference = await nextChantierReference(organizationId);
     const chantier = await prisma.chantier.create({
@@ -111,6 +117,7 @@ chantiersRouter.post(
         reference,
         createdById: req.auth!.userId,
         organizationId,
+        assignments: auth.role === "TECHNICIEN" ? { create: { userId: auth.userId, seenAt: new Date() } } : undefined,
       },
       ...withAssignments,
     });

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, Outlet, useParams } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import { UserRole } from "@proactif-field/shared";
 import { useChantier, useMarkAssignmentSeen } from "../api/hooks";
 import { useAuthStore } from "../auth/store";
@@ -12,7 +12,10 @@ function formatDate(value: string | null): string | null {
 
 export default function ChantierLayout() {
   const { chantierId } = useParams<{ chantierId: string }>();
-  const { data: chantier } = useChantier(chantierId);
+  const { data: chantier, isError, error, refetch } = useChantier(chantierId);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const creationWarning = (location.state as { creationWarning?: string } | null)?.creationWarning;
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === UserRole.ADMIN;
   const markSeen = useMarkAssignmentSeen(chantierId);
@@ -38,6 +41,20 @@ export default function ChantierLayout() {
 
   const startDate = formatDate(chantier?.dateDebutPrevue ?? null);
   const endDate = formatDate(chantier?.dateFinPrevue ?? null);
+
+  if (isError) {
+    return (
+      <main className="page">
+        <div className="error-banner">
+          {error instanceof Error ? error.message : "Impossible de charger ce chantier."}
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Link className="btn secondary" to="/">Retour aux chantiers</Link>
+          <button className="btn" onClick={() => void refetch()}>Réessayer</button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className="chantier-shell">
@@ -70,7 +87,22 @@ export default function ChantierLayout() {
         {tabs.map((tab) => <NavLink key={tab.to} to={tab.to} end={tab.end} className={({ isActive }) => `chantier-tab ${isActive ? "chantier-tab-active" : ""}`}>{tab.label}</NavLink>)}
       </nav>
 
-      <div className="chantier-content"><Outlet /></div>
+      <div className="chantier-content">
+        {creationWarning && (
+          <div className="page" style={{ paddingBottom: 0 }}>
+            <div className="error-banner">
+              {creationWarning}
+              <button
+                type="button"
+                className="btn secondary"
+                style={{ marginLeft: 12 }}
+                onClick={() => navigate(location.pathname, { replace: true, state: null })}
+              >Fermer</button>
+            </div>
+          </div>
+        )}
+        <Outlet />
+      </div>
     </div>
   );
 }

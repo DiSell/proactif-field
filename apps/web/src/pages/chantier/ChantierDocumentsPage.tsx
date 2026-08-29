@@ -19,6 +19,7 @@ export default function ChantierDocumentsPage() {
   const deleteDocument = useDeleteDocument(chantierId);
   const currentUser = useAuthStore((s) => s.user);
   const isAdmin = currentUser?.role === UserRole.ADMIN;
+  const canUpload = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.TECHNICIEN;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showForm, setShowForm] = useState(false);
@@ -84,7 +85,7 @@ export default function ChantierDocumentsPage() {
 
   return (
     <div className="page">
-      {isAdmin && (
+      {canUpload && (
         <button className="btn block" onClick={() => setShowForm((v) => !v)} style={{ marginBottom: 16 }}>
           {showForm ? "Annuler" : "+ Ajouter un document"}
         </button>

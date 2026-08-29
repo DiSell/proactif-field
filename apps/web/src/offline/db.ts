@@ -2,10 +2,11 @@ import { openDB } from "idb";
 import { ChantierSyncDTO } from "@proactif-field/shared";
 
 const DB_NAME = "proactif-field-offline";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 export interface PendingPhoto {
   id: string;
+  userId: string;
   planId: string;
   pointId: string;
   arrayBuffer: ArrayBuffer;
@@ -49,10 +50,16 @@ export interface OfflineSnapshotRecord {
 }
 
 const dbPromise = openDB(DB_NAME, DB_VERSION, {
-  upgrade(db) {
+  upgrade(db, oldVersion, _newVersion, transaction) {
     if (!db.objectStoreNames.contains("pendingPhotos")) {
       const store = db.createObjectStore("pendingPhotos", { keyPath: "id" });
       store.createIndex("by-point", "pointId");
+    }
+    if (oldVersion < 3) {
+      const store = transaction.objectStore("pendingPhotos");
+      // V1/V2 photos had no owner and cannot be attributed safely.
+      store.clear();
+      store.createIndex("by-user", "userId");
     }
     if (!db.objectStoreNames.contains("snapshots")) {
       const store = db.createObjectStore("snapshots", { keyPath: "id" });
@@ -68,8 +75,10 @@ const dbPromise = openDB(DB_NAME, DB_VERSION, {
 });
 
 export async function addPendingPhoto(photo: PendingPhoto) { return (await dbPromise).put("pendingPhotos", photo); }
-export async function getPendingPhotos(): Promise<PendingPhoto[]> { return (await dbPromise).getAll("pendingPhotos"); }
-export async function getPendingPhotosForPoint(pointId: string): Promise<PendingPhoto[]> { return (await dbPromise).getAllFromIndex("pendingPhotos", "by-point", pointId); }
+export async function getPendingPhotos(userId: string): Promise<PendingPhoto[]> { return (await dbPromise).getAllFromIndex("pendingPhotos", "by-user", userId); }
+export async function getPendingPhotosForPoint(userId: string, pointId: string): Promise<PendingPhoto[]> {
+  return (await getPendingPhotos(userId)).filter((photo) => photo.pointId === pointId);
+}
 export async function removePendingPhoto(id: string) { return (await dbPromise).delete("pendingPhotos", id); }
 export async function updatePendingPhotoGps(id: string, gps: { lat: number; lng: number; accuracy: number }) {
   const db = await dbPromise;

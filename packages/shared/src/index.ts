@@ -165,6 +165,7 @@ export interface BlocageDTO {
   startY: number | null;
   endX: number | null;
   endY: number | null;
+  flexionPoints: BlocageTracePoint[];
   startGpsLat: number | null;
   startGpsLng: number | null;
   startGpsAccuracy: number | null;
@@ -179,6 +180,14 @@ export interface BlocageDTO {
   resolvedByName: string | null;
 }
 
+export interface BlocageTracePoint {
+  x: number;
+  y: number;
+  gpsLat: number | null;
+  gpsLng: number | null;
+  gpsAccuracy: number | null;
+}
+
 export interface CreateBlocageInput {
   id?: string;
   titre: string;
@@ -188,6 +197,7 @@ export interface CreateBlocageInput {
   startY?: number;
   endX?: number;
   endY?: number;
+  flexionPoints?: BlocageTracePoint[];
   startGpsLat?: number | null;
   startGpsLng?: number | null;
   startGpsAccuracy?: number | null;
@@ -221,7 +231,15 @@ export interface ActivityLogDTO {
   description: string | null;
   metadata: Record<string, string | number | boolean> | null;
   createdAt: string;
+  chantierName?: string;
+  chantierReference?: string;
 }
+
+export type UpdateOwnProfileInput = {
+  name?: string;
+  phone?: string | null;
+  employerCompany?: string | null;
+};
 
 export interface ActivityLogPageDTO {
   activities: ActivityLogDTO[];

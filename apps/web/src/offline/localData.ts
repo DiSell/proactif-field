@@ -46,7 +46,7 @@ export async function createLocalBlocage(pointId: string, input: CreateBlocageIn
   if (!snapshot || !user) throw new Error("Point indisponible hors ligne.");
   const point = snapshot.points.find((item) => item.id === pointId)!;
   const now = new Date().toISOString();
-  const blocage: BlocageDTO = { id: input.id ?? crypto.randomUUID(), organizationId: user.organizationId, chantierId: snapshot.chantier.id, pointId, pointIdentifiant: point.identifiant, createdById: user.id, createdByName: user.name, titre: input.titre, description: input.description, statut: BlocageStatut.OUVERT, priorite: input.priorite, photos: [], photoCount: 0, startX: input.startX ?? null, startY: input.startY ?? null, endX: input.endX ?? point.x, endY: input.endY ?? point.y, startGpsLat: input.startGpsLat ?? null, startGpsLng: input.startGpsLng ?? null, startGpsAccuracy: input.startGpsAccuracy ?? null, endGpsLat: input.endGpsLat ?? null, endGpsLng: input.endGpsLng ?? null, endGpsAccuracy: input.endGpsAccuracy ?? null, distanceMeters: gpsDistance(input.startGpsLat, input.startGpsLng, input.endGpsLat, input.endGpsLng), createdAt: now, updatedAt: now, resolvedAt: null, resolvedById: null, resolvedByName: null };
+  const blocage: BlocageDTO = { id: input.id ?? crypto.randomUUID(), organizationId: user.organizationId, chantierId: snapshot.chantier.id, pointId, pointIdentifiant: point.identifiant, createdById: user.id, createdByName: user.name, titre: input.titre, description: input.description, statut: BlocageStatut.OUVERT, priorite: input.priorite, photos: [], photoCount: 0, startX: input.startX ?? null, startY: input.startY ?? null, endX: input.endX ?? point.x, endY: input.endY ?? point.y, flexionPoints: input.flexionPoints ?? [], startGpsLat: input.startGpsLat ?? null, startGpsLng: input.startGpsLng ?? null, startGpsAccuracy: input.startGpsAccuracy ?? null, endGpsLat: input.endGpsLat ?? null, endGpsLng: input.endGpsLng ?? null, endGpsAccuracy: input.endGpsAccuracy ?? null, distanceMeters: traceDistance(input), createdAt: now, updatedAt: now, resolvedAt: null, resolvedById: null, resolvedByName: null };
   await mutateSnapshot(user.id, snapshot.chantier.id, (current) => ({ ...current, blocages: [...current.blocages, blocage], points: current.points.map((item) => item.id === pointId ? { ...item, openBlocageCount: item.openBlocageCount + 1 } : item) }));
   await enqueueOperation({ id: crypto.randomUUID(), userId: user.id, chantierId: snapshot.chantier.id, type: "BLOCAGE_CREATE", resourceId: blocage.id, payload: { pointId, input: { ...input, id: blocage.id } }, createdAt: now });
   return blocage;
@@ -96,4 +96,19 @@ function gpsDistance(aLat?: number | null, aLng?: number | null, bLat?: number |
   const rad = (value: number) => value * Math.PI / 180; const dLat = rad(bLat - aLat); const dLng = rad(bLng - aLng);
   const value = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
   return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function traceDistance(input: CreateBlocageInput): number | null {
+  const positions = [
+    { lat: input.startGpsLat, lng: input.startGpsLng },
+    ...(input.flexionPoints ?? []).map((point) => ({ lat: point.gpsLat, lng: point.gpsLng })),
+    { lat: input.endGpsLat, lng: input.endGpsLng },
+  ];
+  let total = 0;
+  for (let index = 1; index < positions.length; index += 1) {
+    const segment = gpsDistance(positions[index - 1].lat, positions[index - 1].lng, positions[index].lat, positions[index].lng);
+    if (segment == null) return null;
+    total += segment;
+  }
+  return total;
 }

@@ -11,6 +11,9 @@
 .blocage-traces { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 .blocage-traces g { stroke: #c92f27; fill: #fff; stroke-width: .65; vector-effect: non-scaling-stroke; }
 .blocage-traces g.resolved { stroke: #718096; opacity: .55; }
+.blocage-traces g.draft { stroke: #e58a00; stroke-dasharray: 3 2; }
+.blocage-traces .flexion { fill: #fff; stroke-width: .8; }
+.account-menu-link { min-height: 40px; padding: 10px; border-radius: 5px; background: #eef3f9; color: #17243a; font-weight: 700; text-decoration: none; }
 .blocage-traces .cross { stroke-width: 1.2; }
 .blocage-distance { position: absolute; z-index: 8; transform: translate(-50%,-50%); padding: 3px 6px; border: 2px solid #fff; border-radius: 4px; background: #c92f27; color: #fff; font-size: 10px; font-weight: 800; white-space: nowrap; pointer-events: none; }
 .blocage-placement-hint { position: absolute; z-index: 45; top: 72px; left: 50%; transform: translateX(-50%); padding: 10px 14px; border-radius: 7px; background: #17263d; color: #fff; font-weight: 800; box-shadow: 0 6px 20px rgba(0,0,0,.24); pointer-events: none; }

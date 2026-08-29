@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { PointDTO, UserRole } from "@proactif-field/shared";
+import { BlocageTracePoint, PointDTO, UserRole } from "@proactif-field/shared";
 import { useChantierBlocages, useCreatePoint, usePlans, usePoints, useUploadPlan } from "../../api/hooks";
 import { useAuthStore } from "../../auth/store";
 import PlanViewer from "../../components/PlanViewer";
@@ -25,6 +25,8 @@ export default function ChantierPlansPage() {
   const [selectedPoint, setSelectedPoint] = useState<PointDTO | null>(null);
   const [placingBlockageStart, setPlacingBlockageStart] = useState(false);
   const [blockageStart, setBlockageStart] = useState<{ x: number; y: number; gps: { lat: number; lng: number; accuracy: number } | null } | null>(null);
+  const [placingFlexion, setPlacingFlexion] = useState(false);
+  const [blockageFlexions, setBlockageFlexions] = useState<BlocageTracePoint[]>([]);
   const { data: chantierBlocages } = useChantierBlocages(chantierId);
 
   useEffect(() => {
@@ -67,6 +69,12 @@ export default function ChantierPlansPage() {
     setPlacingBlockageStart(false);
   }
 
+  async function handlePlaceFlexion(x: number, y: number) {
+    const gps = await getCurrentPositionSafe();
+    setBlockageFlexions((points) => [...points, { x, y, gpsLat: gps?.lat ?? null, gpsLng: gps?.lng ?? null, gpsAccuracy: gps?.accuracy ?? null }]);
+    setPlacingFlexion(false);
+  }
+
   return (
     <>
       <input
@@ -83,7 +91,7 @@ export default function ChantierPlansPage() {
         <div className="page">
           <div className="upload-zone">
             <p>Aucun plan importé pour ce chantier.</p>
-            {isAdmin ? (
+            {isAdmin || isTechnician ? (
               <button className="btn" onClick={() => fileInputRef.current?.click()} disabled={uploadPlan.isPending}>
                 {uploadPlan.isPending ? "Import…" : "Importer un plan (PDF, PNG, JPG, SVG)"}
               </button>
@@ -102,18 +110,21 @@ export default function ChantierPlansPage() {
               plans={plans}
               points={points ?? []}
               onCreatePoint={handleCreatePoint}
-              onSelectPoint={setSelectedPoint}
+              onSelectPoint={(point) => { setSelectedPoint(point); setBlockageStart(null); setBlockageFlexions([]); }}
               canCreatePoint={isTechnician}
               selectedPointId={selectedPoint?.id}
               onPlanChange={(planId) => { setActivePlanId(planId); setSelectedPoint(null); }}
-              onAddPlan={isAdmin ? () => fileInputRef.current?.click() : undefined}
+              onAddPlan={isAdmin || isTechnician ? () => fileInputRef.current?.click() : undefined}
               blocages={(chantierBlocages ?? []).filter((blocage) => (points ?? []).some((point) => point.id === blocage.pointId))}
               placingBlockageStart={placingBlockageStart}
               onPlaceBlockageStart={handlePlaceBlockageStart}
+              placingFlexion={placingFlexion}
+              onPlaceFlexion={handlePlaceFlexion}
+              draftTrace={selectedPoint && blockageStart && blockageFlexions.length > 0 ? { start: blockageStart, flexions: blockageFlexions, end: selectedPoint } : null}
             />
           )}
           </div>
-          {selectedPoint && activePlan && <PointFiche planId={activePlan.id} point={selectedPoint} canCapture={isTechnician} displayMode="panel" hidden={placingBlockageStart} blockageStart={blockageStart} onPickBlockageStart={() => setPlacingBlockageStart(true)} onClose={() => { setSelectedPoint(null); setBlockageStart(null); }} />}
+          {selectedPoint && activePlan && <PointFiche planId={activePlan.id} point={selectedPoint} canCapture={isTechnician} displayMode="panel" hidden={placingBlockageStart || placingFlexion} blockageStart={blockageStart} blockageFlexions={blockageFlexions} onPickBlockageStart={() => { setBlockageFlexions([]); setPlacingBlockageStart(true); }} onPickFlexion={() => setPlacingFlexion(true)} onUndoFlexion={() => setBlockageFlexions((points) => points.slice(0, -1))} onClearFlexions={() => setBlockageFlexions([])} onClose={() => { setSelectedPoint(null); setBlockageStart(null); setBlockageFlexions([]); }} />}
         </div>
       )}
     </>

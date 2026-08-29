@@ -1,5 +1,5 @@
 import { Blocage, Photo, Point, User } from "@prisma/client";
-import { BlocageDTO } from "@proactif-field/shared";
+import { BlocageDTO, BlocageTracePoint } from "@proactif-field/shared";
 import { toPhotoDTO } from "../photos/mapper";
 
 export type BlocageWithRelations = Blocage & {
@@ -10,6 +10,20 @@ export type BlocageWithRelations = Blocage & {
 };
 
 export function toBlocageDTO(blocage: BlocageWithRelations): BlocageDTO {
+  const flexionPoints: BlocageTracePoint[] = Array.isArray(blocage.flexionPoints)
+    ? blocage.flexionPoints.flatMap((point) => {
+        if (!point || typeof point !== "object" || Array.isArray(point)) return [];
+        const value = point as Record<string, unknown>;
+        if (typeof value.x !== "number" || typeof value.y !== "number") return [];
+        return [{
+          x: value.x,
+          y: value.y,
+          gpsLat: typeof value.gpsLat === "number" ? value.gpsLat : null,
+          gpsLng: typeof value.gpsLng === "number" ? value.gpsLng : null,
+          gpsAccuracy: typeof value.gpsAccuracy === "number" ? value.gpsAccuracy : null,
+        }];
+      })
+    : [];
   return {
     id: blocage.id,
     organizationId: blocage.organizationId,
@@ -28,6 +42,7 @@ export function toBlocageDTO(blocage: BlocageWithRelations): BlocageDTO {
     startY: blocage.startY,
     endX: blocage.endX,
     endY: blocage.endY,
+    flexionPoints,
     startGpsLat: blocage.startGpsLat,
     startGpsLng: blocage.startGpsLng,
     startGpsAccuracy: blocage.startGpsAccuracy,

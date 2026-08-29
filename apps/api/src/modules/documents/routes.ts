@@ -22,9 +22,8 @@ const metaSchema = z.object({
   commentaire: z.string().max(2000).optional(),
 });
 
-// Documents are viewable by anyone with chantier access (technicians need
-// procedures/security docs in the field too), but only ADMIN manages the
-// library — same split as plan upload.
+// Anyone with chantier access can view and add field documents. Deletion
+// stays ADMIN-only so a technician cannot remove the shared library.
 export const chantierDocumentsRouter = Router({ mergeParams: true });
 chantierDocumentsRouter.use(requireAuth);
 
@@ -43,7 +42,6 @@ chantierDocumentsRouter.get(
 
 chantierDocumentsRouter.post(
   "/",
-  requireAdmin,
   uploadDocument.single("file"),
   asyncHandler(async (req, res) => {
     await assertChantierAccess(req.params.id, req.auth!);

@@ -13,7 +13,8 @@ import { logActivity } from "../activity/service";
 
 const relations = { include: { point: { select: { identifiant: true } }, createdBy: { select: { name: true } }, resolvedBy: { select: { name: true } }, photos: { orderBy: { takenAt: "asc" as const } } } } as const;
 const coordinate = z.number().min(0).max(1);
-const createSchema = z.object({ id: z.string().min(1).optional(), titre: z.string().trim().min(1).max(160), description: z.string().trim().min(1).max(3000), priorite: z.nativeEnum(BlocagePriorite).default(BlocagePriorite.NORMALE), startX: coordinate.optional(), startY: coordinate.optional(), endX: coordinate.optional(), endY: coordinate.optional(), startGpsLat: z.number().nullable().optional(), startGpsLng: z.number().nullable().optional(), startGpsAccuracy: z.number().nonnegative().nullable().optional(), endGpsLat: z.number().nullable().optional(), endGpsLng: z.number().nullable().optional(), endGpsAccuracy: z.number().nonnegative().nullable().optional() });
+const tracePointSchema = z.object({ x: coordinate, y: coordinate, gpsLat: z.number().nullable(), gpsLng: z.number().nullable(), gpsAccuracy: z.number().nonnegative().nullable() });
+const createSchema = z.object({ id: z.string().min(1).optional(), titre: z.string().trim().min(1).max(160), description: z.string().trim().min(1).max(3000), priorite: z.nativeEnum(BlocagePriorite).default(BlocagePriorite.NORMALE), startX: coordinate.optional(), startY: coordinate.optional(), endX: coordinate.optional(), endY: coordinate.optional(), flexionPoints: z.array(tracePointSchema).max(50).default([]), startGpsLat: z.number().nullable().optional(), startGpsLng: z.number().nullable().optional(), startGpsAccuracy: z.number().nonnegative().nullable().optional(), endGpsLat: z.number().nullable().optional(), endGpsLng: z.number().nullable().optional(), endGpsAccuracy: z.number().nonnegative().nullable().optional() });
 const updateSchema = z.object({ titre: z.string().trim().min(1).max(160).optional(), description: z.string().trim().min(1).max(3000).optional(), priorite: z.nativeEnum(BlocagePriorite).optional(), statut: z.nativeEnum(BlocageStatut).optional() });
 const photoMetaSchema = z.object({ takenAt: z.string().datetime(), gpsLat: z.coerce.number().nullable().optional(), gpsLng: z.coerce.number().nullable().optional(), gpsAccuracy: z.coerce.number().nullable().optional(), blocageRole: z.nativeEnum(BlocagePhotoRole).default(BlocagePhotoRole.BLOCAGE) });
 
@@ -23,6 +24,21 @@ function gpsDistanceMeters(aLat?: number | null, aLng?: number | null, bLat?: nu
   const dLat = rad(bLat - aLat); const dLng = rad(bLng - aLng);
   const value = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
   return 6371000 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+}
+
+function traceDistanceMeters(input: z.infer<typeof createSchema>): number | null {
+  const positions = [
+    { lat: input.startGpsLat, lng: input.startGpsLng },
+    ...input.flexionPoints.map((point) => ({ lat: point.gpsLat, lng: point.gpsLng })),
+    { lat: input.endGpsLat, lng: input.endGpsLng },
+  ];
+  let total = 0;
+  for (let index = 1; index < positions.length; index += 1) {
+    const segment = gpsDistanceMeters(positions[index - 1].lat, positions[index - 1].lng, positions[index].lat, positions[index].lng);
+    if (segment == null) return null;
+    total += segment;
+  }
+  return total;
 }
 
 export const chantierBlocagesRouter = Router({ mergeParams: true });
@@ -47,7 +63,7 @@ pointBlocagesRouter.post("/", asyncHandler(async (req, res) => {
   const plan = await prisma.plan.findUnique({ where: { id: planId }, include: { chantier: { select: { id: true, organizationId: true } } } });
   if (!plan) throw new HttpError(404, "Point introuvable");
   const blocage = await prisma.$transaction(async (tx) => {
-    const created = await tx.blocage.create({ data: { ...input, distanceMeters: gpsDistanceMeters(input.startGpsLat, input.startGpsLng, input.endGpsLat, input.endGpsLng), pointId: req.params.id, chantierId: plan.chantier.id, organizationId: plan.chantier.organizationId, createdById: req.auth!.userId }, ...relations });
+    const created = await tx.blocage.create({ data: { ...input, distanceMeters: traceDistanceMeters(input), pointId: req.params.id, chantierId: plan.chantier.id, organizationId: plan.chantier.organizationId, createdById: req.auth!.userId }, ...relations });
     await logActivity({ organizationId: plan.chantier.organizationId, chantierId: plan.chantier.id, userId: req.auth!.userId, action: "BLOCAGE_CREE", description: `${created.titre} · ${created.point.identifiant}`, metadata: { blocageId: created.id, pointId: created.pointId, pointIdentifiant: created.point.identifiant } }, tx);
     return created;
   });

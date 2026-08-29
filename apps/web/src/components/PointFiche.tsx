@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { PointDTO, PointStatut } from "@proactif-field/shared";
+import { BlocageTracePoint, PointDTO, PointStatut } from "@proactif-field/shared";
 import { useDeletePoint, usePhotos, useUpdatePoint } from "../api/hooks";
 import { useFileObjectUrl } from "../api/files";
 import {
@@ -11,6 +11,7 @@ import {
 } from "../offline/db";
 import { onSyncChange, trySync } from "../offline/syncManager";
 import { getCurrentPositionSafe } from "../utils/geolocation";
+import { useAuthStore } from "../auth/store";
 import AutocompleteInput from "./AutocompleteInput";
 import Icon from "./Icon";
 import PointBlocages from "./PointBlocages";
@@ -24,6 +25,10 @@ interface Props {
   hidden?: boolean;
   blockageStart?: { x: number; y: number; gps: { lat: number; lng: number; accuracy: number } | null } | null;
   onPickBlockageStart?: () => void;
+  blockageFlexions?: BlocageTracePoint[];
+  onPickFlexion?: () => void;
+  onUndoFlexion?: () => void;
+  onClearFlexions?: () => void;
 }
 
 function formatDateTime(iso: string): string {
@@ -35,7 +40,7 @@ interface LightboxState {
   caption: string;
 }
 
-export default function PointFiche({ planId, point, onClose, canCapture = true, displayMode = "sheet", hidden = false, blockageStart, onPickBlockageStart }: Props) {
+export default function PointFiche({ planId, point, onClose, canCapture = true, displayMode = "sheet", hidden = false, blockageStart, blockageFlexions = [], onPickBlockageStart, onPickFlexion, onUndoFlexion, onClearFlexions }: Props) {
   const updatePoint = useUpdatePoint(planId);
   const deletePoint = useDeletePoint(planId);
   const { data: photos } = usePhotos(point.id);
@@ -43,6 +48,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
   const [capturing, setCapturing] = useState(false);
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const userId = useAuthStore((state) => state.user?.id);
 
   const [identifiant, setIdentifiant] = useState(point.identifiant);
   const [nom, setNom] = useState(point.nom ?? "");
@@ -50,10 +56,11 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
   const [commentaire, setCommentaire] = useState(point.commentaire ?? "");
 
   useEffect(() => {
-    const refresh = () => getPendingPhotosForPoint(point.id).then(setPending);
+    if (!userId) return;
+    const refresh = () => getPendingPhotosForPoint(userId, point.id).then(setPending);
     refresh();
     return onSyncChange(refresh);
-  }, [point.id]);
+  }, [point.id, userId]);
 
   function saveField(patch: Partial<{ identifiant: string; nom: string; type: string; commentaire: string }>) {
     updatePoint.mutate({ id: point.id, input: patch });
@@ -66,7 +73,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
   async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    if (!file) return;
+    if (!file || !userId) return;
 
     setCapturing(true);
     const pendingId = crypto.randomUUID();
@@ -79,6 +86,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
       // in the background afterwards if/when it resolves.
       await addPendingPhoto({
         id: pendingId,
+        userId,
         planId,
         pointId: point.id,
         arrayBuffer,
@@ -91,7 +99,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
         createdAt: new Date().toISOString(),
       });
 
-      const refreshed = await getPendingPhotosForPoint(point.id);
+      const refreshed = await getPendingPhotosForPoint(userId, point.id);
       setPending(refreshed);
       void trySync();
     } finally {
@@ -105,7 +113,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
 
   async function cancelPending(id: string) {
     await removePendingPhoto(id);
-    setPending(await getPendingPhotosForPoint(point.id));
+    if (userId) setPending(await getPendingPhotosForPoint(userId, point.id));
   }
 
   async function handleDeletePoint() {
@@ -178,7 +186,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
           </div>
         </div>
 
-        <PointBlocages planId={planId} point={point} blockageStart={blockageStart} onPickBlockageStart={onPickBlockageStart} />
+        <PointBlocages planId={planId} point={point} blockageStart={blockageStart} blockageFlexions={blockageFlexions} onPickBlockageStart={onPickBlockageStart} onPickFlexion={onPickFlexion} onUndoFlexion={onUndoFlexion} onClearFlexions={onClearFlexions} />
 
         <div className="photo-section point-photo-section">
           <h3 className="photo-section-title">Photos du point ({(photos?.length ?? 0) + pending.length})</h3>
