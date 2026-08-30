@@ -29,6 +29,7 @@ interface Props {
   onPickFlexion?: () => void;
   onUndoFlexion?: () => void;
   onClearFlexions?: () => void;
+  initialBlocageOpen?: boolean;
 }
 
 function formatDateTime(iso: string): string {
@@ -40,7 +41,7 @@ interface LightboxState {
   caption: string;
 }
 
-export default function PointFiche({ planId, point, onClose, canCapture = true, displayMode = "sheet", hidden = false, blockageStart, blockageFlexions = [], onPickBlockageStart, onPickFlexion, onUndoFlexion, onClearFlexions }: Props) {
+export default function PointFiche({ planId, point, onClose, canCapture = true, displayMode = "sheet", hidden = false, blockageStart, blockageFlexions = [], onPickBlockageStart, onPickFlexion, onUndoFlexion, onClearFlexions, initialBlocageOpen = false }: Props) {
   const updatePoint = useUpdatePoint(planId);
   const deletePoint = useDeletePoint(planId);
   const { data: photos } = usePhotos(point.id);
@@ -186,7 +187,7 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
           </div>
         </div>
 
-        <PointBlocages planId={planId} point={point} blockageStart={blockageStart} blockageFlexions={blockageFlexions} onPickBlockageStart={onPickBlockageStart} onPickFlexion={onPickFlexion} onUndoFlexion={onUndoFlexion} onClearFlexions={onClearFlexions} />
+        <PointBlocages planId={planId} point={point} blockageStart={blockageStart} blockageFlexions={blockageFlexions} onPickBlockageStart={onPickBlockageStart} onPickFlexion={onPickFlexion} onUndoFlexion={onUndoFlexion} onClearFlexions={onClearFlexions} initialFormOpen={initialBlocageOpen} />
 
         <div className="photo-section point-photo-section">
           <h3 className="photo-section-title">Photos du point ({(photos?.length ?? 0) + pending.length})</h3>

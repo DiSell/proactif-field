@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -25,7 +25,10 @@ interface Props {
   onPlaceBlockageStart?: (x: number, y: number) => void;
   placingFlexion?: boolean;
   onPlaceFlexion?: (x: number, y: number) => void;
+  onFinishFlexions?: () => void;
+  onUndoFlexion?: () => void;
   draftTrace?: { start: { x: number; y: number }; flexions: BlocageTracePoint[]; end: { x: number; y: number } } | null;
+  onDrawBlockage?: (start: TraceCoordinate, end: TraceCoordinate) => void;
 }
 
 type TraceCoordinate = { x: number; y: number };
@@ -61,16 +64,25 @@ function TraceArrival({ x, y }: TraceCoordinate) {
   </>;
 }
 
-export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint, canCreatePoint = true, plans = [plan], selectedPointId, onPlanChange = () => undefined, onAddPlan, blocages = [], placingBlockageStart = false, onPlaceBlockageStart, placingFlexion = false, onPlaceFlexion, draftTrace = null }: Props) {
+export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint, canCreatePoint = true, plans = [plan], selectedPointId, onPlanChange = () => undefined, onAddPlan, blocages = [], placingBlockageStart = false, onPlaceBlockageStart, placingFlexion = false, onPlaceFlexion, onFinishFlexions, onUndoFlexion, draftTrace = null, onDrawBlockage }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+  const centerViewRef = useRef<(() => void) | null>(null);
   const [pointsVisible, setPointsVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [rotation, setRotation] = useState(0);
   // Non-null only while a 2-finger twist is actively in progress, so the
   // plan follows the fingers 1:1 without the snap transition fighting it.
   const [liveRotation, setLiveRotation] = useState<number | null>(null);
+  const [actionMenu, setActionMenu] = useState<{ left: number; top: number; point: TraceCoordinate } | null>(null);
+  const [drawingBlockage, setDrawingBlockage] = useState(false);
+  const [drawStart, setDrawStart] = useState<TraceCoordinate | null>(null);
+  const [drawCurrent, setDrawCurrent] = useState<TraceCoordinate | null>(null);
+  const suppressClickRef = useRef(false);
   const displayRotation = liveRotation ?? rotation;
+  const recenterPlan = useCallback(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => centerViewRef.current?.()));
+  }, []);
 
   useEffect(() => {
     const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === viewerRef.current);
@@ -82,12 +94,9 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
   // over confusingly to the next plan you open.
   useEffect(() => setRotation(0), [plan.id]);
 
-  // Two-finger twist to rotate on touch devices, alongside the toolbar
-  // button. Listens passively (no preventDefault) so it never interferes
-  // with react-zoom-pan-pinch's own pinch-to-zoom/pan handling on the same
-  // touches — this only reads the angle between the two touch points, it
-  // doesn't consume the gesture. Snaps to the nearest 90° on release, same
-  // as the button, so counter-rotated markers/labels never end up askew.
+  // Google Maps-style two-finger twist: the plan follows the gesture
+  // continuously and keeps the exact angle on release. The listener stays
+  // passive so pinch-to-zoom and rotation can happen in the same gesture.
   useEffect(() => {
     const el = viewerRef.current;
     if (!el) return;
@@ -102,7 +111,8 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
     }
     function onTouchMove(e: TouchEvent) {
       if (e.touches.length === 2 && gesture) {
-        const delta = angleBetween(e.touches[0], e.touches[1]) - gesture.startAngle;
+        const rawDelta = angleBetween(e.touches[0], e.touches[1]) - gesture.startAngle;
+        const delta = ((rawDelta + 180) % 360 + 360) % 360 - 180;
         setLiveRotation(gesture.baseRotation + delta);
       }
     }
@@ -110,7 +120,9 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
       if (e.touches.length < 2 && gesture) {
         gesture = null;
         setLiveRotation((current) => {
-          if (current != null) setRotation(((Math.round(current / 90) * 90) % 360 + 360) % 360);
+          if (current != null) {
+            setRotation(((current % 360) + 360) % 360);
+          }
           return null;
         });
       }
@@ -126,35 +138,89 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
       el.removeEventListener("touchend", onTouchEnd);
       el.removeEventListener("touchcancel", onTouchEnd);
     };
-  }, [rotation]);
+  }, [rotation, recenterPlan]);
 
   async function toggleFullscreen() {
     if (document.fullscreenElement) await document.exitFullscreen();
     else await viewerRef.current?.requestFullscreen();
   }
 
+  function rotatePlan() {
+    setLiveRotation(null);
+    setRotation(0);
+  }
+
+  const planReady = useCallback(() => recenterPlan(), [recenterPlan]);
+
+  function clientToPlan(clientX: number, clientY: number, element: HTMLDivElement): TraceCoordinate {
+    const rect = element.getBoundingClientRect();
+    const width = element.offsetWidth;
+    const height = element.offsetHeight;
+    const radians = rotation * Math.PI / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    const rotatedWidth = Math.abs(width * cos) + Math.abs(height * sin);
+    const scale = rotatedWidth > 0 ? rect.width / rotatedWidth : 1;
+    const screenDx = (clientX - (rect.left + rect.width / 2)) / scale;
+    const screenDy = (clientY - (rect.top + rect.height / 2)) / scale;
+    const localDx = screenDx * cos + screenDy * sin;
+    const localDy = -screenDx * sin + screenDy * cos;
+    return { x: (localDx + width / 2) / width, y: (localDy + height / 2) / height };
+  }
+
   function handleContentClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (suppressClickRef.current) { suppressClickRef.current = false; return; }
     if ((e.target as HTMLElement).closest(".point-marker")) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
+    const { x, y } = clientToPlan(e.clientX, e.clientY, e.currentTarget);
     if (x < 0 || x > 1 || y < 0 || y > 1) return;
     if (placingBlockageStart) { onPlaceBlockageStart?.(x, y); return; }
     if (placingFlexion) { onPlaceFlexion?.(x, y); return; }
-    if (!canCreatePoint) return;
-    onCreatePoint(x, y);
+  }
+
+  function openActionMenu(event: React.MouseEvent<HTMLDivElement>) {
+    if (!canCreatePoint || placingBlockageStart || placingFlexion) return;
+    event.preventDefault();
+    suppressClickRef.current = true;
+    const viewerRect = viewerRef.current?.getBoundingClientRect();
+    if (!viewerRect) return;
+    setActionMenu({ left: event.clientX - viewerRect.left, top: event.clientY - viewerRect.top, point: clientToPlan(event.clientX, event.clientY, event.currentTarget) });
+  }
+
+  function handleDrawPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (!drawingBlockage) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const point = clientToPlan(event.clientX, event.clientY, event.currentTarget);
+    setDrawStart(point); setDrawCurrent(point);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleDrawPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!drawingBlockage || !drawStart) return;
+    event.preventDefault();
+    setDrawCurrent(clientToPlan(event.clientX, event.clientY, event.currentTarget));
+  }
+
+  function handleDrawPointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    if (!drawingBlockage || !drawStart) return;
+    event.preventDefault(); event.stopPropagation(); suppressClickRef.current = true;
+    const end = clientToPlan(event.clientX, event.clientY, event.currentTarget);
+    setDrawingBlockage(false); setDrawStart(null); setDrawCurrent(null);
+    if (Math.hypot(end.x - drawStart.x, end.y - drawStart.y) > .01) onDrawBlockage?.(drawStart, end);
   }
 
   return (
     <div className="plan-viewer" ref={viewerRef}>
       <TransformWrapper initialScale={1} minScale={0.3} maxScale={6} centerOnInit doubleClick={{ mode: "toggle" }}>
-        <PlanToolbar plan={plan} plans={plans} pointsVisible={pointsVisible} isFullscreen={isFullscreen} rotation={rotation} onPlanChange={onPlanChange} onTogglePoints={() => setPointsVisible((visible) => !visible)} onToggleFullscreen={toggleFullscreen} onRotate={() => setRotation((r) => (r + 90) % 360)} onAddPlan={onAddPlan} />
+        {({ centerView }) => <>
+        {void (centerViewRef.current = () => centerView())}
+        <PlanToolbar plan={plan} plans={plans} pointsVisible={pointsVisible} isFullscreen={isFullscreen} rotation={rotation} onPlanChange={onPlanChange} onTogglePoints={() => setPointsVisible((visible) => !visible)} onToggleFullscreen={toggleFullscreen} onRotate={rotatePlan} onAddPlan={onAddPlan} />
         <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
-          <div className="plan-content" ref={contentRef} onClick={handleContentClick} style={{ transform: displayRotation ? `rotate(${displayRotation}deg)` : undefined, transitionDuration: liveRotation != null ? "0s" : undefined }}>
+          <div className={`plan-content ${drawingBlockage ? "drawing-blockage" : ""}`} ref={contentRef} onClick={handleContentClick} onContextMenu={openActionMenu} onPointerDown={handleDrawPointerDown} onPointerMove={handleDrawPointerMove} onPointerUp={handleDrawPointerUp} style={{ transform: displayRotation ? `rotate(${displayRotation}deg)` : undefined, transformOrigin: "50% 50%", transitionDuration: liveRotation != null ? "0s" : undefined }}>
             {plan.fileType === "PDF" ? (
-              <PdfPage planId={plan.id} />
+              <PdfPage planId={plan.id} onReady={planReady} />
             ) : (
-              <PlanImage planId={plan.id} />
+              <PlanImage planId={plan.id} onReady={planReady} />
             )}
             <svg className="blocage-traces" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
               {blocages.filter((blocage) => blocageTrace(blocage).length > 1).map((blocage) => <g key={blocage.id} className={blocage.statut === BlocageStatut.OUVERT ? "open" : "resolved"}>
@@ -163,6 +229,7 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
                 {(blocage.flexionPoints ?? []).map((flexion, index) => <circle key={index} className="flexion" cx={flexion.x * 100} cy={flexion.y * 100} r="1" />)}
               </g>)}
               {draftTrace && <g className="draft"><path d={smoothTracePath([draftTrace.start, ...draftTrace.flexions, draftTrace.end])} fill="none" />{draftTrace.flexions.map((flexion, index) => <circle key={index} className="flexion" cx={flexion.x * 100} cy={flexion.y * 100} r="1" />)}</g>}
+              {drawStart && drawCurrent && <g className="draft"><line x1={drawStart.x * 100} y1={drawStart.y * 100} x2={drawCurrent.x * 100} y2={drawCurrent.y * 100} /><circle cx={drawStart.x * 100} cy={drawStart.y * 100} r="1.5" /></g>}
             </svg>
             {blocages.filter((blocage) => blocage.distanceMeters != null && blocage.startX != null && blocage.startY != null && blocage.endX != null && blocage.endY != null).map((blocage) => <span key={`distance-${blocage.id}`} className="blocage-distance" style={{ left: `${((blocage.startX! + blocage.endX!) / 2) * 100}%`, top: `${((blocage.startY! + blocage.endY!) / 2) * 100}%`, transform: displayRotation ? `translate(-50%, -50%) rotate(${-displayRotation}deg)` : undefined }}>{blocage.distanceMeters!.toFixed(1)} m</span>)}
             {pointsVisible && points.map((point) => (
@@ -174,13 +241,17 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
             </svg>
           </div>
         </TransformComponent>
+        </>}
       </TransformWrapper>
       {/* Rendered outside the pannable/zoomable/rotatable .plan-content so it
           stays put on screen as a real banner, instead of moving/rotating
           with the plan and ending up wherever the current transform happens
           to place it (it used to sit inside .plan-content, right on top of
           the marker). */}
-      {(placingBlockageStart || placingFlexion) && <div className="blocage-placement-hint">{placingFlexion ? "Touchez le plan pour placer la flexion" : "Touchez le départ A sur le plan"}</div>}
+      {placingBlockageStart && <div className="blocage-placement-hint">Touchez le départ A sur le plan</div>}
+      {drawingBlockage && <div className="blocage-placement-hint">Gardez le doigt appuyé et glissez de A vers B</div>}
+      {placingFlexion && <div className="blocage-placement-controls"><strong>Touchez le plan pour ajouter les flexions</strong><span>{draftTrace?.flexions.length ?? 0} placée{(draftTrace?.flexions.length ?? 0) > 1 ? "s" : ""}</span><button type="button" disabled={!draftTrace?.flexions.length} onClick={onUndoFlexion}>Annuler la dernière</button><button type="button" className="done" onClick={onFinishFlexions}>Terminer</button></div>}
+      {actionMenu && <div className="plan-action-menu" style={{ left: actionMenu.left, top: actionMenu.top }}><button type="button" onClick={() => { onCreatePoint(actionMenu.point.x, actionMenu.point.y); setActionMenu(null); }}>Point info</button><button type="button" onClick={() => { setActionMenu(null); setDrawingBlockage(true); }}>Tracer un blocage</button><button type="button" className="cancel" onClick={() => setActionMenu(null)}>Annuler</button></div>}
     </div>
   );
 }
@@ -196,14 +267,14 @@ function LoadError({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-function PlanImage({ planId }: { planId: string }) {
+function PlanImage({ planId, onReady }: { planId: string; onReady: () => void }) {
   const { url, error, retry } = useFileObjectUrl("plans", planId);
   if (error) return <LoadError onRetry={retry} />;
   if (!url) return <div style={{ padding: 40, color: "var(--ink-muted)" }}>Chargement du plan…</div>;
-  return <img src={url} alt="Plan" draggable={false} />;
+  return <img src={url} alt="Plan" draggable={false} onLoad={onReady} />;
 }
 
-function PdfPage({ planId }: { planId: string }) {
+function PdfPage({ planId, onReady }: { planId: string; onReady: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -225,7 +296,7 @@ function PdfPage({ planId }: { planId: string }) {
         const ctx = canvas.getContext("2d");
         if (!ctx) return;
         await page.render({ canvasContext: ctx, viewport }).promise;
-        if (!cancelled) setLoading(false);
+        if (!cancelled) { setLoading(false); onReady(); }
       })
       .catch(() => {
         if (!cancelled) {
@@ -236,7 +307,7 @@ function PdfPage({ planId }: { planId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [planId, attempt]);
+  }, [planId, attempt, onReady]);
 
   if (error) return <LoadError onRetry={() => setAttempt((a) => a + 1)} />;
 

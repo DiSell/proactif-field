@@ -15,14 +15,15 @@ interface Props {
   onPickFlexion?: () => void;
   onUndoFlexion?: () => void;
   onClearFlexions?: () => void;
+  initialFormOpen?: boolean;
 }
 
-export default function PointBlocages({ planId, point, blockageStart, blockageFlexions = [], onPickBlockageStart, onPickFlexion, onUndoFlexion, onClearFlexions }: Props) {
+export default function PointBlocages({ planId, point, blockageStart, blockageFlexions = [], onPickBlockageStart, onPickFlexion, onUndoFlexion, onClearFlexions, initialFormOpen = false }: Props) {
   const { data: blocages } = usePointBlocages(point.id);
   const createBlocage = useCreateBlocage(planId, point.id);
   const updateBlocage = useUpdateBlocage(planId);
   const uploadPhoto = useUploadBlocagePhoto(point.id);
-  const [formOpen, setFormOpen] = useState(false);
+  const [formOpen, setFormOpen] = useState(initialFormOpen);
   const [titre, setTitre] = useState("");
   const [description, setDescription] = useState("");
   const [priorite, setPriorite] = useState(BlocagePriorite.NORMALE);

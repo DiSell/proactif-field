@@ -27,6 +27,7 @@ export default function ChantierPlansPage() {
   const [blockageStart, setBlockageStart] = useState<{ x: number; y: number; gps: { lat: number; lng: number; accuracy: number } | null } | null>(null);
   const [placingFlexion, setPlacingFlexion] = useState(false);
   const [blockageFlexions, setBlockageFlexions] = useState<BlocageTracePoint[]>([]);
+  const [openBlocageForm, setOpenBlocageForm] = useState(false);
   const { data: chantierBlocages } = useChantierBlocages(chantierId);
 
   useEffect(() => {
@@ -61,18 +62,37 @@ export default function ChantierPlansPage() {
       x,
       y,
     });
+    setOpenBlocageForm(false);
     setSelectedPoint(point);
   }
 
-  async function handlePlaceBlockageStart(x: number, y: number) {
-    setBlockageStart({ x, y, gps: await getCurrentPositionSafe() });
-    setPlacingBlockageStart(false);
+  async function handleDrawBlockage(start: { x: number; y: number }, end: { x: number; y: number }) {
+    if (!activePlan) return;
+    const nextNumber = (points?.length ?? 0) + 1;
+    const point = await createPoint.mutateAsync({ identifiant: `P${nextNumber}`, x: end.x, y: end.y });
+    setBlockageStart({ x: start.x, y: start.y, gps: null });
+    setBlockageFlexions([]);
+    setOpenBlocageForm(true);
+    setSelectedPoint(point);
+    void getCurrentPositionSafe().then((gps) => {
+      if (gps) setBlockageStart((current) => current?.x === start.x && current.y === start.y ? { ...current, gps } : current);
+    });
   }
 
-  async function handlePlaceFlexion(x: number, y: number) {
-    const gps = await getCurrentPositionSafe();
-    setBlockageFlexions((points) => [...points, { x, y, gpsLat: gps?.lat ?? null, gpsLng: gps?.lng ?? null, gpsAccuracy: gps?.accuracy ?? null }]);
-    setPlacingFlexion(false);
+  async function handlePlaceBlockageStart(x: number, y: number) {
+    setBlockageStart({ x, y, gps: null });
+    setPlacingBlockageStart(false);
+    void getCurrentPositionSafe().then((gps) => {
+      if (gps) setBlockageStart((current) => current?.x === x && current.y === y ? { ...current, gps } : current);
+    });
+  }
+
+  function handlePlaceFlexion(x: number, y: number) {
+    const flexion: BlocageTracePoint = { x, y, gpsLat: null, gpsLng: null, gpsAccuracy: null };
+    setBlockageFlexions((points) => [...points, flexion]);
+    void getCurrentPositionSafe().then((gps) => {
+      if (gps) setBlockageFlexions((points) => points.map((point) => point === flexion ? { ...point, gpsLat: gps.lat, gpsLng: gps.lng, gpsAccuracy: gps.accuracy } : point));
+    });
   }
 
   return (
@@ -110,7 +130,7 @@ export default function ChantierPlansPage() {
               plans={plans}
               points={points ?? []}
               onCreatePoint={handleCreatePoint}
-              onSelectPoint={(point) => { setSelectedPoint(point); setBlockageStart(null); setBlockageFlexions([]); }}
+              onSelectPoint={(point) => { setSelectedPoint(point); setBlockageStart(null); setBlockageFlexions([]); setPlacingBlockageStart(false); setPlacingFlexion(false); setOpenBlocageForm(false); }}
               canCreatePoint={isTechnician}
               selectedPointId={selectedPoint?.id}
               onPlanChange={(planId) => { setActivePlanId(planId); setSelectedPoint(null); }}
@@ -120,11 +140,14 @@ export default function ChantierPlansPage() {
               onPlaceBlockageStart={handlePlaceBlockageStart}
               placingFlexion={placingFlexion}
               onPlaceFlexion={handlePlaceFlexion}
-              draftTrace={selectedPoint && blockageStart && blockageFlexions.length > 0 ? { start: blockageStart, flexions: blockageFlexions, end: selectedPoint } : null}
+              onFinishFlexions={() => setPlacingFlexion(false)}
+              onUndoFlexion={() => setBlockageFlexions((points) => points.slice(0, -1))}
+              draftTrace={selectedPoint && blockageStart ? { start: blockageStart, flexions: blockageFlexions, end: selectedPoint } : null}
+              onDrawBlockage={handleDrawBlockage}
             />
           )}
           </div>
-          {selectedPoint && activePlan && <PointFiche planId={activePlan.id} point={selectedPoint} canCapture={isTechnician} displayMode="panel" hidden={placingBlockageStart || placingFlexion} blockageStart={blockageStart} blockageFlexions={blockageFlexions} onPickBlockageStart={() => { setBlockageFlexions([]); setPlacingBlockageStart(true); }} onPickFlexion={() => setPlacingFlexion(true)} onUndoFlexion={() => setBlockageFlexions((points) => points.slice(0, -1))} onClearFlexions={() => setBlockageFlexions([])} onClose={() => { setSelectedPoint(null); setBlockageStart(null); setBlockageFlexions([]); }} />}
+          {selectedPoint && activePlan && <PointFiche key={selectedPoint.id} planId={activePlan.id} point={selectedPoint} canCapture={isTechnician} displayMode="panel" hidden={placingBlockageStart || placingFlexion} blockageStart={blockageStart} blockageFlexions={blockageFlexions} initialBlocageOpen={openBlocageForm} onPickBlockageStart={() => { setBlockageFlexions([]); setPlacingBlockageStart(true); }} onPickFlexion={() => setPlacingFlexion(true)} onUndoFlexion={() => setBlockageFlexions((points) => points.slice(0, -1))} onClearFlexions={() => setBlockageFlexions([])} onClose={() => { setSelectedPoint(null); setBlockageStart(null); setBlockageFlexions([]); setOpenBlocageForm(false); }} />}
         </div>
       )}
     </>
