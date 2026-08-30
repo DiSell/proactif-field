@@ -79,6 +79,7 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
   const [drawStart, setDrawStart] = useState<TraceCoordinate | null>(null);
   const [drawCurrent, setDrawCurrent] = useState<TraceCoordinate | null>(null);
   const suppressClickRef = useRef(false);
+  const longPressRef = useRef<{ timer: number; pointerId: number; clientX: number; clientY: number } | null>(null);
   const displayRotation = liveRotation ?? rotation;
   const recenterPlan = useCallback(() => {
     requestAnimationFrame(() => requestAnimationFrame(() => centerViewRef.current?.()));
@@ -106,6 +107,7 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
 
     function onTouchStart(e: TouchEvent) {
       if (e.touches.length === 2) {
+        cancelLongPress();
         gesture = { startAngle: angleBetween(e.touches[0], e.touches[1]), baseRotation: rotation };
       }
     }
@@ -128,15 +130,15 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
       }
     }
 
-    el.addEventListener("touchstart", onTouchStart, { passive: true });
-    el.addEventListener("touchmove", onTouchMove, { passive: true });
-    el.addEventListener("touchend", onTouchEnd, { passive: true });
-    el.addEventListener("touchcancel", onTouchEnd, { passive: true });
+    el.addEventListener("touchstart", onTouchStart, { passive: true, capture: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: true, capture: true });
+    el.addEventListener("touchend", onTouchEnd, { passive: true, capture: true });
+    el.addEventListener("touchcancel", onTouchEnd, { passive: true, capture: true });
     return () => {
-      el.removeEventListener("touchstart", onTouchStart);
-      el.removeEventListener("touchmove", onTouchMove);
-      el.removeEventListener("touchend", onTouchEnd);
-      el.removeEventListener("touchcancel", onTouchEnd);
+      el.removeEventListener("touchstart", onTouchStart, true);
+      el.removeEventListener("touchmove", onTouchMove, true);
+      el.removeEventListener("touchend", onTouchEnd, true);
+      el.removeEventListener("touchcancel", onTouchEnd, true);
     };
   }, [rotation, recenterPlan]);
 
@@ -186,6 +188,42 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
     setActionMenu({ left: event.clientX - viewerRect.left, top: event.clientY - viewerRect.top, point: clientToPlan(event.clientX, event.clientY, event.currentTarget) });
   }
 
+  function cancelLongPress() {
+    if (!longPressRef.current) return;
+    window.clearTimeout(longPressRef.current.timer);
+    longPressRef.current = null;
+  }
+
+  function handleViewerPointerDownCapture(event: React.PointerEvent<HTMLDivElement>) {
+    const target = event.target as HTMLElement;
+    const content = target.closest(".plan-content") as HTMLDivElement | null;
+    if (!content || target.closest(".point-marker") || drawingBlockage || placingBlockageStart || placingFlexion || !canCreatePoint || event.pointerType === "mouse" && event.button !== 0) return;
+    cancelLongPress();
+    const pointerId = event.pointerId;
+    const clientX = event.clientX;
+    const clientY = event.clientY;
+    const timer = window.setTimeout(() => {
+      if (longPressRef.current?.pointerId !== pointerId) return;
+      const viewerRect = viewerRef.current?.getBoundingClientRect();
+      if (viewerRect) {
+        suppressClickRef.current = true;
+        navigator.vibrate?.(30);
+        setActionMenu({ left: clientX - viewerRect.left, top: clientY - viewerRect.top, point: clientToPlan(clientX, clientY, content) });
+      }
+      longPressRef.current = null;
+    }, 550);
+    longPressRef.current = { timer, pointerId, clientX, clientY };
+  }
+
+  function handleViewerPointerMoveCapture(event: React.PointerEvent<HTMLDivElement>) {
+    const pending = longPressRef.current;
+    if (pending?.pointerId === event.pointerId && Math.hypot(event.clientX - pending.clientX, event.clientY - pending.clientY) > 10) cancelLongPress();
+  }
+
+  function handleViewerPointerEndCapture(event: React.PointerEvent<HTMLDivElement>) {
+    if (longPressRef.current?.pointerId === event.pointerId) cancelLongPress();
+  }
+
   function handleDrawPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (!drawingBlockage) return;
     event.preventDefault();
@@ -210,7 +248,7 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
   }
 
   return (
-    <div className="plan-viewer" ref={viewerRef}>
+    <div className="plan-viewer" ref={viewerRef} onPointerDownCapture={handleViewerPointerDownCapture} onPointerMoveCapture={handleViewerPointerMoveCapture} onPointerUpCapture={handleViewerPointerEndCapture} onPointerCancelCapture={handleViewerPointerEndCapture}>
       <TransformWrapper initialScale={1} minScale={0.3} maxScale={6} centerOnInit doubleClick={{ mode: "toggle" }}>
         {({ centerView }) => <>
         {void (centerViewRef.current = () => centerView())}
