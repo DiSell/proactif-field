@@ -129,7 +129,7 @@ export default function AppLayout() {
             <span className="account-copy"><strong>{user?.name ?? "Utilisateur"}</strong><small>{isAdmin ? "Responsable / Admin" : "Technicien terrain"}</small></span>
             <Icon name="more" />
           </button>
-          {accountOpen && <div className="account-menu"><span>{user?.email}</span>{isTechnician && <NavLink className="account-menu-link" to="/mon-compte" onClick={closeMobile}>Mon compte</NavLink>}{isTechnician && !pushEnabled && <button onClick={() => void activatePush()}>Activer les notifications</button>}{isTechnician && pushMessage && <small>{pushMessage}</small>}<button onClick={() => clearAuth()}>Se déconnecter</button></div>}
+          {accountOpen && <div className="account-menu"><span>{user?.email}</span>{isTechnician && !pushEnabled && <button onClick={() => void activatePush()}>Activer les notifications</button>}{isTechnician && pushMessage && <small>{pushMessage}</small>}<button onClick={() => clearAuth()}>Se déconnecter</button></div>}
         </div>
       </aside>
 

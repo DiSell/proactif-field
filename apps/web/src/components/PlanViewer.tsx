@@ -51,6 +51,16 @@ function blocageTrace(blocage: BlocageDTO): TraceCoordinate[] {
   return [{ x: blocage.startX, y: blocage.startY }, ...(blocage.flexionPoints ?? []), { x: blocage.endX, y: blocage.endY }];
 }
 
+function TraceArrival({ x, y }: TraceCoordinate) {
+  const centerX = x * 100;
+  const centerY = y * 100;
+  return <>
+    <circle className="arrival-ring" cx={centerX} cy={centerY} r="2.8" />
+    <line x1={centerX - 2} y1={centerY - 2} x2={centerX + 2} y2={centerY + 2} />
+    <line x1={centerX + 2} y1={centerY - 2} x2={centerX - 2} y2={centerY + 2} />
+  </>;
+}
+
 export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint, canCreatePoint = true, plans = [plan], selectedPointId, onPlanChange = () => undefined, onAddPlan, blocages = [], placingBlockageStart = false, onPlaceBlockageStart, placingFlexion = false, onPlaceFlexion, draftTrace = null }: Props) {
   const contentRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -151,8 +161,6 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
                 <path d={smoothTracePath(blocageTrace(blocage))} fill="none" />
                 <circle cx={blocage.startX! * 100} cy={blocage.startY! * 100} r="1.5" />
                 {(blocage.flexionPoints ?? []).map((flexion, index) => <circle key={index} className="flexion" cx={flexion.x * 100} cy={flexion.y * 100} r="1" />)}
-                <line className="cross" x1={blocage.endX! * 100 - 1.8} y1={blocage.endY! * 100 - 1.8} x2={blocage.endX! * 100 + 1.8} y2={blocage.endY! * 100 + 1.8} />
-                <line className="cross" x1={blocage.endX! * 100 + 1.8} y1={blocage.endY! * 100 - 1.8} x2={blocage.endX! * 100 - 1.8} y2={blocage.endY! * 100 + 1.8} />
               </g>)}
               {draftTrace && <g className="draft"><path d={smoothTracePath([draftTrace.start, ...draftTrace.flexions, draftTrace.end])} fill="none" />{draftTrace.flexions.map((flexion, index) => <circle key={index} className="flexion" cx={flexion.x * 100} cy={flexion.y * 100} r="1" />)}</g>}
             </svg>
@@ -160,6 +168,10 @@ export default function PlanViewer({ plan, points, onCreatePoint, onSelectPoint,
             {pointsVisible && points.map((point) => (
               <PointMarker key={point.id} point={point} selected={point.id === selectedPointId} rotation={displayRotation} onClick={() => placingBlockageStart ? onPlaceBlockageStart?.(point.x, point.y) : placingFlexion ? onPlaceFlexion?.(point.x, point.y) : onSelectPoint(point)} />
             ))}
+            <svg className="blocage-arrivals" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              {blocages.filter((blocage) => blocage.endX != null && blocage.endY != null).map((blocage) => <g key={blocage.id} className={blocage.statut === BlocageStatut.OUVERT ? "open" : "resolved"}><TraceArrival x={blocage.endX!} y={blocage.endY!} /></g>)}
+              {draftTrace && <g className="draft"><TraceArrival x={draftTrace.end.x} y={draftTrace.end.y} /></g>}
+            </svg>
           </div>
         </TransformComponent>
       </TransformWrapper>
