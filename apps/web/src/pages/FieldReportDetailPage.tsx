@@ -43,6 +43,7 @@ export default function FieldReportDetailPage() {
   const [editingHeader, setEditingHeader] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [lastCreatedItemId, setLastCreatedItemId] = useState<string | null>(null);
+  const [validatedItemIds, setValidatedItemIds] = useState<Set<string>>(new Set());
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
   const [openingPdf, setOpeningPdf] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,6 +65,15 @@ export default function FieldReportDetailPage() {
     } finally {
       setCapturing(false);
     }
+  }
+
+  // "Valider" locks in the current entry (badge, no more nudging to finish
+  // it) and immediately re-opens the camera for the next one — same
+  // one-photo-at-a-time loop as PointFiche, just with an explicit step
+  // between entries instead of relying only on the top capture button.
+  function handleValidate(itemId: string) {
+    setValidatedItemIds((prev) => new Set(prev).add(itemId));
+    fileInputRef.current?.click();
   }
 
   async function handleDelete() {
@@ -152,9 +162,20 @@ export default function FieldReportDetailPage() {
         <p className="photo-section-empty" style={{ marginTop: 16 }}>Aucune entrée pour l'instant — prenez une photo pour commencer.</p>
       ) : (
         <div className="field-report-item-list">
-          {items.map((item, index) => (
-            <FieldReportItemCard key={item.id} rapportId={rapport.id} item={item} index={items.length - 1 - index} autoFocus={item.id === lastCreatedItemId} />
-          ))}
+          {items.map((item, index) => {
+            const isActive = item.id === lastCreatedItemId && !validatedItemIds.has(item.id);
+            return (
+              <FieldReportItemCard
+                key={item.id}
+                rapportId={rapport.id}
+                item={item}
+                index={items.length - 1 - index}
+                autoFocus={isActive}
+                validated={validatedItemIds.has(item.id)}
+                onValidate={isActive ? () => handleValidate(item.id) : undefined}
+              />
+            );
+          })}
         </div>
       )}
 

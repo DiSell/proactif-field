@@ -184,8 +184,8 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
           onCapture={handleCapture}
           onCancelPending={cancelPending}
           photos={[
-            ...(photos ?? []).map((photo): PhotoCaptureItem => ({ id: photo.id, takenAt: photo.takenAt })),
-            ...pending.map((p): PhotoCaptureItem => ({ id: p.id, takenAt: p.takenAt, pending: true, blob: new Blob([p.arrayBuffer], { type: p.mimeType }) })),
+            ...(photos ?? []).map((photo): PhotoCaptureItem => ({ id: photo.id, takenAt: photo.takenAt, gpsLat: photo.gpsLat, gpsLng: photo.gpsLng, gpsAccuracy: photo.gpsAccuracy })),
+            ...pending.map((p): PhotoCaptureItem => ({ id: p.id, takenAt: p.takenAt, gpsLat: p.gpsLat, gpsLng: p.gpsLng, gpsAccuracy: p.gpsAccuracy, pending: true, blob: new Blob([p.arrayBuffer], { type: p.mimeType }) })),
           ]}
         />
 

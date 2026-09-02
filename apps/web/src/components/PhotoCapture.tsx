@@ -13,6 +13,9 @@ import Icon from "./Icon";
 export interface PhotoCaptureItem {
   id: string;
   takenAt: string;
+  gpsLat?: number | null;
+  gpsLng?: number | null;
+  gpsAccuracy?: number | null;
   /** Shows the "en attente" badge and a cancel button — Point's not-yet-synced photos. */
   pending?: boolean;
   /** Raw bytes for a pending photo that has no server id to fetch by yet. Omit to resolve via fileKind/id instead. */
@@ -32,6 +35,24 @@ interface Props {
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function formatGps(lat?: number | null, lng?: number | null, accuracy?: number | null): string | null {
+  if (lat == null || lng == null) return null;
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}${accuracy != null ? ` (± ${Math.round(accuracy)} m)` : ""}`;
+}
+
+// Stays attached to the photo it belongs to — date/heure and GPS are always
+// rendered together, right under that photo's thumbnail, never pulled up to
+// a report/item-level summary.
+function PhotoMeta({ photo }: { photo: PhotoCaptureItem }) {
+  const gps = formatGps(photo.gpsLat, photo.gpsLng, photo.gpsAccuracy);
+  return (
+    <div className="photo-meta">
+      <div>{formatDateTime(photo.takenAt)}</div>
+      <div className="photo-gps">{gps ?? "GPS indisponible"}</div>
+    </div>
+  );
 }
 
 interface LightboxState {
@@ -137,7 +158,7 @@ function RemoteThumb({ photo, fileKind, onOpen }: { photo: PhotoCaptureItem; fil
       ) : (
         <div style={{ aspectRatio: 1, background: "var(--paper-2)" }} />
       )}
-      <div className="photo-meta">{formatDateTime(photo.takenAt)}</div>
+      <PhotoMeta photo={photo} />
     </div>
   );
 }
@@ -169,7 +190,7 @@ function BlobThumb({ photo, onOpen, onCancel }: { photo: PhotoCaptureItem; onOpe
           </div>
         )}
       </div>
-      <div className="photo-meta">{formatDateTime(photo.takenAt)}</div>
+      <PhotoMeta photo={photo} />
     </div>
   );
 }

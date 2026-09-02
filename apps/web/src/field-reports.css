@@ -78,6 +78,36 @@
   padding-top: 12px;
 }
 
+.field-report-item-card .chantier-point-card-header {
+  align-items: center;
+}
+
+.field-report-validated-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #e8f5ed;
+  color: #247542;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.field-report-item-validated {
+  border-left: 4px solid #247542;
+}
+
+.field-report-validate-btn {
+  margin-top: 14px;
+  background: #247542;
+  border-color: #247542;
+  color: #fff;
+}
+
 .gps-status {
   display: block;
   margin-top: 4px;
