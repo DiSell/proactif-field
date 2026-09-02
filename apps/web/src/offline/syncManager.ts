@@ -62,6 +62,14 @@ async function executeFieldReport(type: string, resourceId: string, payload: Rec
 // later operations on the same resource never run out of order — but the
 // caller only ever hands this a same-domain subset (chantier XOR field
 // report), so a failure in one domain can't block the other's queue.
+//
+// A 404 is treated as terminal rather than retried: the target (report,
+// item, photo…) genuinely doesn't exist server-side any more — most often
+// because an earlier CREATE for it never landed, or it was deleted from
+// another device — and retrying it every 20s can never succeed. Dropping
+// it and moving on also self-heals a whole chain: every operation queued
+// after it for that same dead resource will 404 in turn and get dropped
+// too, instead of piling up behind the first one forever.
 async function runQueue(operations: OfflineOperation[], run: (op: OfflineOperation) => Promise<void>): Promise<void> {
   for (const operation of operations) {
     await putOperation({ ...operation, state: "SYNCING" }); notify();
@@ -71,10 +79,29 @@ async function runQueue(operations: OfflineOperation[], run: (op: OfflineOperati
       lastError = null;
     } catch (error) {
       lastError = error instanceof ApiError || error instanceof Error ? error.message : "Erreur inconnue";
+      if (error instanceof ApiError && error.status === 404) {
+        await removeOperation(operation.id);
+        continue;
+      }
       await putOperation({ ...operation, attempts: operation.attempts + 1, state: "ERROR", lastError });
       break;
     }
   }
+}
+
+// Field-report operations are grouped by report so a stuck/failing report
+// can never block sync for a different, healthy one — unlike a single flat
+// queue, where one permanently-failing operation for report A would also
+// freeze every queued operation for report B behind it.
+function groupByRapportTerrain(operations: OfflineOperation[]): OfflineOperation[][] {
+  const groups = new Map<string, OfflineOperation[]>();
+  for (const operation of operations) {
+    const key = typeof operation.payload.rapportTerrainId === "string" ? operation.payload.rapportTerrainId : operation.resourceId;
+    const group = groups.get(key);
+    if (group) group.push(operation);
+    else groups.set(key, [operation]);
+  }
+  return [...groups.values()];
 }
 
 export async function trySync(): Promise<void> {
@@ -92,11 +119,13 @@ export async function trySync(): Promise<void> {
       await execute(operation.type, operation.resourceId, operation.payload);
       refreshedChantiers.add(operation.chantierId);
     });
-    await runQueue(fieldReportOps, async (operation) => {
-      await executeFieldReport(operation.type, operation.resourceId, operation.payload);
-      const rapportTerrainId = operation.payload.rapportTerrainId;
-      if (typeof rapportTerrainId === "string") touchedFieldReports.add(rapportTerrainId);
-    });
+    for (const group of groupByRapportTerrain(fieldReportOps)) {
+      await runQueue(group, async (operation) => {
+        await executeFieldReport(operation.type, operation.resourceId, operation.payload);
+        const rapportTerrainId = operation.payload.rapportTerrainId;
+        if (typeof rapportTerrainId === "string") touchedFieldReports.add(rapportTerrainId);
+      });
+    }
 
     for (const photo of await getPendingPhotos(user.id)) {
       try {
