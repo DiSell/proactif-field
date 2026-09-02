@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { RapportTerrainItemDTO } from "@proactif-field/shared";
-import { useUpdateFieldReportItem } from "../api/fieldReportHooks";
+import { useDeleteFieldReportItem, useDeleteFieldReportItemPhoto, useUpdateFieldReportItem } from "../api/fieldReportHooks";
 import { addLocalFieldReportItemPhoto, updateLocalFieldReportItemPhotoGps } from "../offline/fieldReports";
 import { trySync } from "../offline/syncManager";
 import { getCurrentPositionSafe } from "../utils/geolocation";
@@ -27,6 +27,8 @@ function formatDateTime(iso: string): string {
 export default function FieldReportItemCard({ rapportId, item, index, autoFocus = false, validated = false, onValidate }: Props) {
   const qc = useQueryClient();
   const updateItem = useUpdateFieldReportItem(rapportId);
+  const deleteItem = useDeleteFieldReportItem(rapportId);
+  const deletePhoto = useDeleteFieldReportItemPhoto(rapportId);
   const [titre, setTitre] = useState(item.titre ?? "");
   const [commentaire, setCommentaire] = useState(item.commentaire ?? "");
   const [capturing, setCapturing] = useState(false);
@@ -37,6 +39,16 @@ export default function FieldReportItemCard({ rapportId, item, index, autoFocus 
 
   function invalidate() {
     qc.invalidateQueries({ queryKey: ["field-reports", rapportId] });
+  }
+
+  function handleDelete() {
+    if (!confirm(`Supprimer ce point${item.titre ? ` "${item.titre}"` : ""} et ses photos ?`)) return;
+    deleteItem.mutate(item.id);
+  }
+
+  function handleDeletePhoto(photoId: string) {
+    if (!confirm("Supprimer cette photo ?")) return;
+    deletePhoto.mutate({ itemId: item.id, photoId });
   }
 
   // Same two-step flow as PointFiche's photo capture: save the photo
@@ -89,6 +101,7 @@ export default function FieldReportItemCard({ rapportId, item, index, autoFocus 
         title="Photos"
         capturing={capturing}
         onCapture={handleCapture}
+        onDeletePhoto={handleDeletePhoto}
         photos={item.photos.map((p): PhotoCaptureItem => ({ id: p.id, takenAt: p.takenAt, gpsLat: p.gpsLat, gpsLng: p.gpsLng, gpsAccuracy: p.gpsAccuracy }))}
       />
       {onValidate && (
@@ -96,6 +109,9 @@ export default function FieldReportItemCard({ rapportId, item, index, autoFocus 
           <Icon name="check" /> Valider et prendre la photo suivante
         </button>
       )}
+      <button className="btn danger block" onClick={handleDelete} disabled={deleteItem.isPending} style={{ marginTop: 12 }}>
+        Supprimer ce point
+      </button>
     </div>
   );
 }

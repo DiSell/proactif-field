@@ -162,6 +162,29 @@ export async function updateLocalFieldReportItem(rapportTerrainId: string, itemI
   return updated;
 }
 
+// Mirrors deleteLocalFieldReport: an item still waiting on its own
+// FIELD_REPORT_ITEM_CREATE (never reached the server) is dropped locally
+// along with every operation queued for it — including its photo uploads —
+// instead of round-tripping a create-then-delete. Otherwise a genuine
+// FIELD_REPORT_ITEM_DELETE is queued.
+export async function deleteLocalFieldReportItem(rapportTerrainId: string, itemId: string): Promise<void> {
+  const user = await requireUser();
+  const record = await getLocalFieldReport(user.id, rapportTerrainId);
+  if (!record) throw new Error("Rapport terrain indisponible hors ligne.");
+  const item = record.rapport.items.find((i) => i.id === itemId);
+  const items = record.rapport.items.filter((i) => i.id !== itemId);
+  const now = new Date().toISOString();
+  await putLocalFieldReport({ ...record, dirty: true, rapport: { ...record.rapport, items, itemCount: items.length, photoCount: record.rapport.photoCount - (item?.photos.length ?? 0), updatedAt: now } });
+
+  const pending = await getOperations(user.id);
+  const stillUnsynced = pending.some((op) => op.type === "FIELD_REPORT_ITEM_CREATE" && op.resourceId === itemId);
+  if (stillUnsynced) {
+    await Promise.all(pending.filter((op) => op.payload.itemId === itemId || op.resourceId === itemId).map((op) => removeOperation(op.id)));
+    return;
+  }
+  await enqueueOperation({ id: crypto.randomUUID(), userId: user.id, chantierId: rapportTerrainId, type: "FIELD_REPORT_ITEM_DELETE", resourceId: itemId, payload: { rapportTerrainId, itemId }, createdAt: now });
+}
+
 export async function addLocalFieldReportItemPhoto(rapportTerrainId: string, itemId: string, file: Blob, gps: { lat: number; lng: number; accuracy: number } | null): Promise<RapportTerrainPhotoDTO> {
   const user = await requireUser();
   const record = await getLocalFieldReport(user.id, rapportTerrainId);
@@ -182,6 +205,25 @@ export async function addLocalFieldReportItemPhoto(rapportTerrainId: string, ite
     createdAt: now,
   });
   return photo;
+}
+
+// Same "cancel if never synced, else queue a real delete" logic as
+// deleteLocalFieldReportItem/deleteLocalFieldReport.
+export async function deleteLocalFieldReportItemPhoto(rapportTerrainId: string, itemId: string, photoId: string): Promise<void> {
+  const user = await requireUser();
+  const record = await getLocalFieldReport(user.id, rapportTerrainId);
+  if (!record) throw new Error("Rapport terrain indisponible hors ligne.");
+  const now = new Date().toISOString();
+  const items = record.rapport.items.map((item) => item.id !== itemId ? item : { ...item, photos: item.photos.filter((p) => p.id !== photoId) });
+  await putLocalFieldReport({ ...record, dirty: true, rapport: { ...record.rapport, items, photoCount: Math.max(0, record.rapport.photoCount - 1), updatedAt: now } });
+
+  const pending = await getOperations(user.id);
+  const stillUnsynced = pending.some((op) => op.type === "FIELD_REPORT_PHOTO_CREATE" && op.payload.id === photoId);
+  if (stillUnsynced) {
+    await Promise.all(pending.filter((op) => op.type === "FIELD_REPORT_PHOTO_CREATE" && op.payload.id === photoId).map((op) => removeOperation(op.id)));
+    return;
+  }
+  await enqueueOperation({ id: crypto.randomUUID(), userId: user.id, chantierId: rapportTerrainId, type: "FIELD_REPORT_PHOTO_DELETE", resourceId: photoId, payload: { rapportTerrainId, itemId, photoId }, createdAt: now });
 }
 
 // Mirrors updatePendingPhotoGps (db.ts): a photo is saved immediately so the

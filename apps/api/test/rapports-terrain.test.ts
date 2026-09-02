@@ -110,6 +110,113 @@ describe("Rapports terrain", () => {
     expect(detail.body.rapportTerrain.items[0].photos).toHaveLength(1);
   });
 
+  it("supprime une photo d'un point sans supprimer le point lui-même", async () => {
+    const organization = await createOrganization();
+    organizationIds.push(organization.id);
+    const technician = await createUser({ organizationId: organization.id, role: UserRole.TECHNICIEN });
+    const created = await request(app).post("/api/rapports-terrain").set(authHeader(technician)).send({ nom: "Rapport" });
+    const rapportId = created.body.rapportTerrain.id as string;
+    const item = await request(app).post(`/api/rapports-terrain/${rapportId}/items`).set(authHeader(technician)).send({ titre: "Point" });
+    const itemId = item.body.item.id as string;
+    const photo1 = await request(app)
+      .post(`/api/rapports-terrain/items/${itemId}/photos`)
+      .set(authHeader(technician))
+      .field("takenAt", new Date().toISOString())
+      .attach("file", Buffer.from("photo 1"), { filename: "1.jpg", contentType: "image/jpeg" });
+    await request(app)
+      .post(`/api/rapports-terrain/items/${itemId}/photos`)
+      .set(authHeader(technician))
+      .field("takenAt", new Date().toISOString())
+      .attach("file", Buffer.from("photo 2"), { filename: "2.jpg", contentType: "image/jpeg" });
+
+    const deletion = await request(app).delete(`/api/rapports-terrain/photos/${photo1.body.photo.id}`).set(authHeader(technician));
+    expect(deletion.status).toBe(204);
+
+    const detail = await request(app).get(`/api/rapports-terrain/${rapportId}`).set(authHeader(technician));
+    expect(detail.body.rapportTerrain.photoCount).toBe(1);
+    expect(detail.body.rapportTerrain.itemCount).toBe(1);
+    expect(detail.body.rapportTerrain.items[0].photos).toHaveLength(1);
+  });
+
+  it("refuse à un technicien de supprimer une photo d'un rapport qui n'est pas le sien", async () => {
+    const organization = await createOrganization();
+    organizationIds.push(organization.id);
+    const techA = await createUser({ organizationId: organization.id, role: UserRole.TECHNICIEN });
+    const techB = await createUser({ organizationId: organization.id, role: UserRole.TECHNICIEN });
+    const created = await request(app).post("/api/rapports-terrain").set(authHeader(techA)).send({ nom: "Privé" });
+    const item = await request(app).post(`/api/rapports-terrain/${created.body.rapportTerrain.id}/items`).set(authHeader(techA)).send({ titre: "Point" });
+    const photo = await request(app)
+      .post(`/api/rapports-terrain/items/${item.body.item.id}/photos`)
+      .set(authHeader(techA))
+      .field("takenAt", new Date().toISOString())
+      .attach("file", Buffer.from("photo"), { filename: "1.jpg", contentType: "image/jpeg" });
+
+    const response = await request(app).delete(`/api/rapports-terrain/photos/${photo.body.photo.id}`).set(authHeader(techB));
+
+    expect(response.status).toBe(404);
+  });
+
+  it("supprime un point (entrée) et ses photos, et ajuste les compteurs du rapport", async () => {
+    const organization = await createOrganization();
+    organizationIds.push(organization.id);
+    const technician = await createUser({ organizationId: organization.id, role: UserRole.TECHNICIEN });
+    const created = await request(app).post("/api/rapports-terrain").set(authHeader(technician)).send({ nom: "Rapport à nettoyer" });
+    const rapportId = created.body.rapportTerrain.id as string;
+    const keep = await request(app).post(`/api/rapports-terrain/${rapportId}/items`).set(authHeader(technician)).send({ titre: "À garder" });
+    const toDelete = await request(app).post(`/api/rapports-terrain/${rapportId}/items`).set(authHeader(technician)).send({ titre: "À supprimer" });
+    const itemId = toDelete.body.item.id as string;
+    await request(app)
+      .post(`/api/rapports-terrain/items/${itemId}/photos`)
+      .set(authHeader(technician))
+      .field("takenAt", new Date().toISOString())
+      .attach("file", Buffer.from("photo a supprimer"), { filename: "photo.jpg", contentType: "image/jpeg" });
+
+    const deletion = await request(app).delete(`/api/rapports-terrain/items/${itemId}`).set(authHeader(technician));
+    expect(deletion.status).toBe(204);
+
+    const detail = await request(app).get(`/api/rapports-terrain/${rapportId}`).set(authHeader(technician));
+    expect(detail.body.rapportTerrain.items.map((i: { id: string }) => i.id)).toEqual([keep.body.item.id]);
+    expect(detail.body.rapportTerrain.itemCount).toBe(1);
+    expect(detail.body.rapportTerrain.photoCount).toBe(0);
+
+    const log = await prisma.rapportTerrainActivityLog.findFirst({ where: { rapportTerrainId: rapportId, action: "RAPPORT_TERRAIN_ITEM_SUPPRIME" } });
+    expect(log).not.toBeNull();
+  });
+
+  it("refuse à un technicien de supprimer un point d'un rapport qui n'est pas le sien", async () => {
+    const organization = await createOrganization();
+    organizationIds.push(organization.id);
+    const techA = await createUser({ organizationId: organization.id, role: UserRole.TECHNICIEN });
+    const techB = await createUser({ organizationId: organization.id, role: UserRole.TECHNICIEN });
+    const created = await request(app).post("/api/rapports-terrain").set(authHeader(techA)).send({ nom: "Privé" });
+    const item = await request(app).post(`/api/rapports-terrain/${created.body.rapportTerrain.id}/items`).set(authHeader(techA)).send({ titre: "Point" });
+
+    const response = await request(app).delete(`/api/rapports-terrain/items/${item.body.item.id}`).set(authHeader(techB));
+
+    expect(response.status).toBe(404);
+  });
+
+  it("génère un PDF pour un rapport dont une entrée a une photo réelle", async () => {
+    const organization = await createOrganization();
+    organizationIds.push(organization.id);
+    const technician = await createUser({ organizationId: organization.id, role: UserRole.TECHNICIEN });
+    const created = await request(app).post("/api/rapports-terrain").set(authHeader(technician)).send({ nom: "Rapport avec photo" });
+    const rapportId = created.body.rapportTerrain.id as string;
+    const item = await request(app).post(`/api/rapports-terrain/${rapportId}/items`).set(authHeader(technician)).send({ titre: "Regard" });
+    await request(app)
+      .post(`/api/rapports-terrain/items/${item.body.item.id}/photos`)
+      .set(authHeader(technician))
+      .field("takenAt", new Date().toISOString())
+      .attach("file", Buffer.from("photo reelle"), { filename: "photo.jpg", contentType: "image/jpeg" });
+
+    const generated = await request(app).post(`/api/rapports-terrain/${rapportId}/pdf`).set(authHeader(technician));
+
+    expect(generated.status).toBe(201);
+    const file = await request(app).get(`/api/files/rapport-terrain-pdfs/${generated.body.pdf.id}`).set(authHeader(technician));
+    expect(file.status).toBe(200);
+    expect(file.headers["content-type"]).toContain("application/pdf");
+  });
+
   it("permet à l'admin de voir tous les rapports terrain de son organisation", async () => {
     const organization = await createOrganization();
     organizationIds.push(organization.id);

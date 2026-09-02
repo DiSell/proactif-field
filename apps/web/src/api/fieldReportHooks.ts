@@ -14,6 +14,8 @@ import {
   createLocalFieldReport,
   createLocalFieldReportItem,
   deleteLocalFieldReport,
+  deleteLocalFieldReportItem,
+  deleteLocalFieldReportItemPhoto,
   getLocalFieldReportList,
   getLocalFieldReportRecord,
   mergeServerFieldReports,
@@ -125,6 +127,22 @@ export function useUpdateFieldReportItem(rapportId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateRapportTerrainItemInput }) => updateLocalFieldReportItem(rapportId!, id, input),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [...KEY, rapportId] }); void trySync(); },
+  });
+}
+
+export function useDeleteFieldReportItem(rapportId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: string) => deleteLocalFieldReportItem(rapportId!, itemId),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: [...KEY, rapportId] }); qc.invalidateQueries({ queryKey: KEY }); void trySync(); },
+  });
+}
+
+export function useDeleteFieldReportItemPhoto(rapportId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, photoId }: { itemId: string; photoId: string }) => deleteLocalFieldReportItemPhoto(rapportId!, itemId, photoId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: [...KEY, rapportId] }); void trySync(); },
   });
 }

@@ -99,11 +99,11 @@ export async function assertRapportTerrainItemAccess(itemId: string, auth: AuthC
   return { rapportTerrainId: item.rapportTerrainId, ...rapport };
 }
 
-export async function assertRapportTerrainPhotoAccess(photoId: string, auth: AuthContext): Promise<{ rapportTerrainItemId: string }> {
+export async function assertRapportTerrainPhotoAccess(photoId: string, auth: AuthContext): Promise<{ rapportTerrainItemId: string; rapportTerrainId: string }> {
   const photo = await prisma.rapportTerrainPhoto.findUnique({ where: { id: photoId }, select: { rapportTerrainItemId: true } });
   if (!photo) throw new HttpError(404, "Photo introuvable");
-  await assertRapportTerrainItemAccess(photo.rapportTerrainItemId, auth);
-  return photo;
+  const { rapportTerrainId } = await assertRapportTerrainItemAccess(photo.rapportTerrainItemId, auth);
+  return { rapportTerrainItemId: photo.rapportTerrainItemId, rapportTerrainId };
 }
 
 export async function assertRapportTerrainPdfAccess(pdfId: string, auth: AuthContext): Promise<{ rapportTerrainId: string }> {

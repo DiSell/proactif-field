@@ -20,7 +20,7 @@ import { pushRouter } from "./modules/push/routes";
 import { organizationRouter } from "./modules/organization/routes";
 import { activityRouter, chantierActivityRouter } from "./modules/activity/routes";
 import { chantierMaterielRouter, materielRouter } from "./modules/materiel/routes";
-import { rapportsTerrainRouter, rapportTerrainItemsRouter, rapportTerrainPdfRouter } from "./modules/rapports-terrain/routes";
+import { rapportsTerrainRouter, rapportTerrainItemsRouter, rapportTerrainPdfRouter, rapportTerrainPhotosRouter } from "./modules/rapports-terrain/routes";
 
 export function createApp() {
   const app = express();
@@ -59,6 +59,7 @@ export function createApp() {
   app.use("/api/push", pushRouter);
   app.use("/api/organization", organizationRouter);
   app.use("/api/rapports-terrain/items", rapportTerrainItemsRouter);
+  app.use("/api/rapports-terrain/photos", rapportTerrainPhotosRouter);
   app.use("/api/rapports-terrain/:id/pdf", rapportTerrainPdfRouter);
   app.use("/api/rapports-terrain", rapportsTerrainRouter);
 

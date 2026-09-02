@@ -6,9 +6,11 @@ import { requireAuth } from "../../middleware/auth";
 import { asyncHandler } from "../../utils/asyncHandler";
 import { HttpError } from "../../middleware/errorHandler";
 import { uploadRapportTerrainPhoto } from "../../middleware/upload";
+import { deleteFile } from "../../utils/storage";
 import {
   assertRapportTerrainAccess,
   assertRapportTerrainItemAccess,
+  assertRapportTerrainPhotoAccess,
 } from "../../utils/access";
 import { toRapportTerrainDTO, toRapportTerrainItemDTO, toRapportTerrainPdfDTO } from "./mapper";
 import { logRapportTerrainActivityAsync } from "./activity";
@@ -203,6 +205,21 @@ rapportTerrainItemsRouter.patch(
   })
 );
 
+rapportTerrainItemsRouter.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const auth = req.auth!;
+    const { rapportTerrainId } = await assertRapportTerrainItemAccess(req.params.id, auth);
+    const item = await prisma.rapportTerrainItem.findUnique({ where: { id: req.params.id }, select: { titre: true } });
+    // Cascades to its photos (schema.prisma) — matches Point's own delete,
+    // which doesn't clean up files on disk either (see modules/points/routes.ts).
+    await prisma.rapportTerrainItem.delete({ where: { id: req.params.id } });
+    await prisma.rapportTerrain.update({ where: { id: rapportTerrainId }, data: { updatedAt: new Date() } });
+    logRapportTerrainActivityAsync({ organizationId: auth.organizationId, rapportTerrainId, userId: auth.userId, action: "RAPPORT_TERRAIN_ITEM_SUPPRIME", metadata: { itemId: req.params.id, itemTitre: item?.titre } });
+    res.status(204).send();
+  })
+);
+
 rapportTerrainItemsRouter.post(
   "/:id/photos",
   uploadRapportTerrainPhoto.single("file"),
@@ -226,6 +243,27 @@ rapportTerrainItemsRouter.post(
     const item = await prisma.rapportTerrainItem.findUnique({ where: { id: req.params.id }, select: { titre: true } });
     logRapportTerrainActivityAsync({ organizationId: auth.organizationId, rapportTerrainId, userId: auth.userId, action: "RAPPORT_TERRAIN_PHOTO_AJOUTEE", metadata: { itemId: req.params.id, itemTitre: item?.titre } });
     res.status(201).json({ photo: { id: photo.id, rapportTerrainItemId: photo.rapportTerrainItemId, takenAt: photo.takenAt.toISOString(), gpsLat: photo.gpsLat, gpsLng: photo.gpsLng, gpsAccuracy: photo.gpsAccuracy, createdAt: photo.createdAt.toISOString() } });
+  })
+);
+
+// DELETE /api/rapports-terrain/photos/:id.
+export const rapportTerrainPhotosRouter = Router();
+rapportTerrainPhotosRouter.use(requireAuth);
+
+rapportTerrainPhotosRouter.delete(
+  "/:id",
+  asyncHandler(async (req, res) => {
+    const auth = req.auth!;
+    const { rapportTerrainId } = await assertRapportTerrainPhotoAccess(req.params.id, auth);
+    const photo = await prisma.rapportTerrainPhoto.findUnique({ where: { id: req.params.id } });
+    if (!photo) throw new HttpError(404, "Photo introuvable");
+    await prisma.rapportTerrainPhoto.delete({ where: { id: req.params.id } });
+    // Matches modules/photos/routes.ts: a photo's file is removed from disk
+    // on delete (unlike whole-item/whole-report delete, which only cascade
+    // the DB rows — see the item DELETE handler above).
+    deleteFile(photo.filePath);
+    await prisma.rapportTerrain.update({ where: { id: rapportTerrainId }, data: { updatedAt: new Date() } });
+    res.status(204).send();
   })
 );
 

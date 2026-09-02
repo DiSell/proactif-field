@@ -4,9 +4,11 @@ interface Props {
   arrayBuffer: ArrayBuffer;
   onClose: () => void;
   onDownload: () => void;
+  /** Optional — omit to keep this preview exactly as it was (chantier reports). */
+  onShare?: () => void;
 }
 
-export default function ReportPreview({ arrayBuffer, onClose, onDownload }: Props) {
+export default function ReportPreview({ arrayBuffer, onClose, onDownload, onShare }: Props) {
   return (
     <div className="sheet-overlay" onClick={onClose}>
       <div className="sheet report-preview-sheet" onClick={(e) => e.stopPropagation()}>
@@ -19,9 +21,16 @@ export default function ReportPreview({ arrayBuffer, onClose, onDownload }: Prop
 
         <PdfCanvasPages arrayBuffer={arrayBuffer} />
 
-        <button className="btn block" onClick={onDownload} style={{ marginTop: 12 }}>
-          ⬇️ Télécharger le PDF
-        </button>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          {onShare && (
+            <button className="btn secondary block" onClick={onShare}>
+              Partager
+            </button>
+          )}
+          <button className="btn block" onClick={onDownload}>
+            ⬇️ Télécharger le PDF
+          </button>
+        </div>
       </div>
     </div>
   );

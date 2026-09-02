@@ -46,6 +46,7 @@ export default function FieldReportDetailPage() {
   const [validatedItemIds, setValidatedItemIds] = useState<Set<string>>(new Set());
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
   const [openingPdf, setOpeningPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleMainCapture(e: React.ChangeEvent<HTMLInputElement>) {
@@ -85,9 +86,12 @@ export default function FieldReportDetailPage() {
   async function handleGeneratePdf() {
     if (!id) return;
     setOpeningPdf(true);
+    setPdfError(null);
     try {
       const pdf = await generatePdf.mutateAsync();
       setPdfBuffer(await apiFetchArrayBuffer(`/api/files/rapport-terrain-pdfs/${pdf.id}`));
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : "Échec de la génération du PDF.");
     } finally {
       setOpeningPdf(false);
     }
@@ -95,11 +99,18 @@ export default function FieldReportDetailPage() {
 
   async function openExistingPdf(pdfId: string) {
     setOpeningPdf(true);
+    setPdfError(null);
     try {
       setPdfBuffer(await apiFetchArrayBuffer(`/api/files/rapport-terrain-pdfs/${pdfId}`));
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : "Échec de l'ouverture du PDF.");
     } finally {
       setOpeningPdf(false);
     }
+  }
+
+  function pdfFileName(): string {
+    return `rapport-terrain-${(rapport?.nom ?? "sans-nom").replace(/[^a-z0-9]+/gi, "-")}.pdf`;
   }
 
   function downloadPdf() {
@@ -108,9 +119,28 @@ export default function FieldReportDetailPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `rapport-terrain-${rapport?.nom ?? "sans-nom"}.pdf`;
+    a.download = pdfFileName();
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  // Native share sheet (mobile) so the technician can send the PDF straight
+  // to email/WhatsApp/etc. without a download-then-attach detour. Falls
+  // back to a plain download wherever file sharing isn't supported (most
+  // desktop browsers) rather than showing a button that would just fail.
+  async function sharePdf() {
+    if (!pdfBuffer) return;
+    const file = new File([pdfBuffer], pdfFileName(), { type: "application/pdf" });
+    const nav = navigator as Navigator & { canShare?: (data: { files: File[] }) => boolean; share?: (data: { files: File[]; title?: string }) => Promise<void> };
+    if (nav.share && nav.canShare?.({ files: [file] })) {
+      try {
+        await nav.share({ files: [file], title: rapport?.nom ?? "Rapport terrain" });
+      } catch (err) {
+        if (err instanceof Error && err.name !== "AbortError") setPdfError(err.message);
+      }
+    } else {
+      downloadPdf();
+    }
   }
 
   if (isError) {
@@ -155,7 +185,7 @@ export default function FieldReportDetailPage() {
 
       <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: "none" }} onChange={handleMainCapture} />
       <button className="btn block field-report-main-capture" disabled={capturing} onClick={() => fileInputRef.current?.click()}>
-        {!capturing && <Icon name="camera" />}{capturing ? "Enregistrement…" : "+ Prendre une photo"}
+        {!capturing && <Icon name="camera" />}{capturing ? "Enregistrement…" : "+ Nouveau point"}
       </button>
 
       {items.length === 0 ? (
@@ -180,6 +210,7 @@ export default function FieldReportDetailPage() {
       )}
 
       <div className="section-title" style={{ marginTop: 28 }}>Rapport PDF</div>
+      {pdfError && <div className="error-banner">{pdfError}</div>}
       <button className="btn block" onClick={handleGeneratePdf} disabled={openingPdf || generatePdf.isPending}>
         <Icon name="report" /> {openingPdf || generatePdf.isPending ? "Génération…" : "Générer et prévisualiser le PDF"}
       </button>
@@ -193,7 +224,7 @@ export default function FieldReportDetailPage() {
           ))}
         </div>
       )}
-      {pdfBuffer && <ReportPreview arrayBuffer={pdfBuffer} onClose={() => setPdfBuffer(null)} onDownload={downloadPdf} />}
+      {pdfBuffer && <ReportPreview arrayBuffer={pdfBuffer} onClose={() => setPdfBuffer(null)} onDownload={downloadPdf} onShare={sharePdf} />}
 
       <button className="btn danger block" style={{ marginTop: 24 }} onClick={handleDelete}>Supprimer ce rapport</button>
     </div>

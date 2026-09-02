@@ -51,7 +51,9 @@ async function executeFieldReport(type: string, resourceId: string, payload: Rec
     case "FIELD_REPORT_DELETE": await apiDelete(`/api/rapports-terrain/${resourceId}`); break;
     case "FIELD_REPORT_ITEM_CREATE": await apiPostJson(`/api/rapports-terrain/${payload.rapportTerrainId}/items`, payload.input); break;
     case "FIELD_REPORT_ITEM_UPDATE": await apiPatchJson(`/api/rapports-terrain/items/${resourceId}`, payload.input); break;
+    case "FIELD_REPORT_ITEM_DELETE": await apiDelete(`/api/rapports-terrain/items/${resourceId}`); break;
     case "FIELD_REPORT_PHOTO_CREATE": await apiPostForm(`/api/rapports-terrain/items/${payload.itemId}/photos`, photoForm(payload)); break;
+    case "FIELD_REPORT_PHOTO_DELETE": await apiDelete(`/api/rapports-terrain/photos/${resourceId}`); break;
     default: throw new Error(`Opération hors ligne inconnue : ${type}`);
   }
 }

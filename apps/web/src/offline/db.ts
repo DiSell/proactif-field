@@ -32,7 +32,9 @@ export type OfflineOperationType =
   | "FIELD_REPORT_DELETE"
   | "FIELD_REPORT_ITEM_CREATE"
   | "FIELD_REPORT_ITEM_UPDATE"
-  | "FIELD_REPORT_PHOTO_CREATE";
+  | "FIELD_REPORT_ITEM_DELETE"
+  | "FIELD_REPORT_PHOTO_CREATE"
+  | "FIELD_REPORT_PHOTO_DELETE";
 
 // Operation types whose sync side-effect is "go refresh this chantier's
 // snapshot" (see syncManager.ts). Field reports have no chantier snapshot,

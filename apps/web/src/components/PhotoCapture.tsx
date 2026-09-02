@@ -30,7 +30,10 @@ interface Props {
   canCapture?: boolean;
   capturing?: boolean;
   onCapture: (file: File) => void;
+  /** Cancels a not-yet-synced upload — only shown for photos with `pending: true` (PointFiche). */
   onCancelPending?: (id: string) => void;
+  /** Deletes any photo, synced or not — shown on every thumbnail when provided (field-report entries). */
+  onDeletePhoto?: (id: string) => void;
 }
 
 function formatDateTime(iso: string): string {
@@ -60,7 +63,7 @@ interface LightboxState {
   caption: string;
 }
 
-export default function PhotoCapture({ fileKind, photos, title, emptyLabel = "Aucune photo pour l'instant.", canCapture = true, capturing = false, onCapture, onCancelPending }: Props) {
+export default function PhotoCapture({ fileKind, photos, title, emptyLabel = "Aucune photo pour l'instant.", canCapture = true, capturing = false, onCapture, onCancelPending, onDeletePhoto }: Props) {
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,6 +88,7 @@ export default function PhotoCapture({ fileKind, photos, title, emptyLabel = "Au
               fileKind={fileKind}
               onOpen={(url) => setLightbox({ url, caption: formatDateTime(photo.takenAt) })}
               onCancel={onCancelPending && photo.pending ? () => onCancelPending(photo.id) : undefined}
+              onDelete={onDeletePhoto ? () => onDeletePhoto(photo.id) : undefined}
             />
           ))}
         </div>
@@ -121,49 +125,66 @@ function PhotoLightbox({ state, onClose }: { state: LightboxState; onClose: () =
   );
 }
 
+function DeleteButton({ onDelete }: { onDelete: () => void }) {
+  return (
+    <button
+      onClick={onDelete}
+      aria-label="Supprimer la photo"
+      style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.6)", color: "white", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12, lineHeight: "20px", padding: 0 }}
+    >
+      <Icon name="close" size={14} />
+    </button>
+  );
+}
+
 function PhotoThumb({
   photo,
   fileKind,
   onOpen,
   onCancel,
+  onDelete,
 }: {
   photo: PhotoCaptureItem;
   fileKind: Props["fileKind"];
   onOpen: (url: string) => void;
   onCancel?: () => void;
+  onDelete?: () => void;
 }) {
   return photo.blob ? (
-    <BlobThumb photo={photo} onOpen={onOpen} onCancel={onCancel} />
+    <BlobThumb photo={photo} onOpen={onOpen} onCancel={onCancel} onDelete={onDelete} />
   ) : (
-    <RemoteThumb photo={photo} fileKind={fileKind} onOpen={onOpen} />
+    <RemoteThumb photo={photo} fileKind={fileKind} onOpen={onOpen} onDelete={onDelete} />
   );
 }
 
 // Used for every photo that already has a server (or offline-echoed) id to
 // fetch by — see useFileObjectUrl, which resolves from the local cache
 // first and only hits the network when online and uncached.
-function RemoteThumb({ photo, fileKind, onOpen }: { photo: PhotoCaptureItem; fileKind: Props["fileKind"]; onOpen: (url: string) => void }) {
+function RemoteThumb({ photo, fileKind, onOpen, onDelete }: { photo: PhotoCaptureItem; fileKind: Props["fileKind"]; onOpen: (url: string) => void; onDelete?: () => void }) {
   const { url, error, retry } = useFileObjectUrl(fileKind, photo.id);
   return (
     <div>
-      {error ? (
-        <button
-          onClick={retry}
-          style={{ aspectRatio: 1, width: "100%", background: "var(--paper-2)", borderRadius: 8, border: "none", color: "#fca5a5", fontSize: 11 }}
-        >
-          Échec — réessayer
-        </button>
-      ) : url ? (
-        <img src={url} alt="" onClick={() => onOpen(url)} style={{ cursor: "pointer" }} />
-      ) : (
-        <div style={{ aspectRatio: 1, background: "var(--paper-2)" }} />
-      )}
+      <div style={{ position: "relative" }}>
+        {error ? (
+          <button
+            onClick={retry}
+            style={{ aspectRatio: 1, width: "100%", background: "var(--paper-2)", borderRadius: 8, border: "none", color: "#fca5a5", fontSize: 11 }}
+          >
+            Échec — réessayer
+          </button>
+        ) : url ? (
+          <img src={url} alt="" onClick={() => onOpen(url)} style={{ cursor: "pointer" }} />
+        ) : (
+          <div style={{ aspectRatio: 1, background: "var(--paper-2)" }} />
+        )}
+        {onDelete && <DeleteButton onDelete={onDelete} />}
+      </div>
       <PhotoMeta photo={photo} />
     </div>
   );
 }
 
-function BlobThumb({ photo, onOpen, onCancel }: { photo: PhotoCaptureItem; onOpen: (url: string) => void; onCancel?: () => void }) {
+function BlobThumb({ photo, onOpen, onCancel, onDelete }: { photo: PhotoCaptureItem; onOpen: (url: string) => void; onCancel?: () => void; onDelete?: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!photo.blob) return;
@@ -176,14 +197,8 @@ function BlobThumb({ photo, onOpen, onCancel }: { photo: PhotoCaptureItem; onOpe
     <div>
       <div style={{ position: "relative" }}>
         {url && <img src={url} alt="" onClick={() => onOpen(url)} style={{ cursor: "pointer" }} />}
-        {onCancel && (
-          <button
-            onClick={onCancel}
-            style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.6)", color: "white", border: "none", borderRadius: "50%", width: 20, height: 20, fontSize: 12, lineHeight: "20px", padding: 0 }}
-          >
-            <Icon name="close" size={14} />
-          </button>
-        )}
+        {onCancel && <DeleteButton onDelete={onCancel} />}
+        {!onCancel && onDelete && <DeleteButton onDelete={onDelete} />}
         {photo.pending && (
           <div style={{ position: "absolute", top: 4, left: 4, background: "rgba(245,158,11,0.9)", color: "#111", fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4 }}>
             en attente
