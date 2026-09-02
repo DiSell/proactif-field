@@ -15,7 +15,7 @@ export function formatDate(date: Date): string {
 const THUMB = 150;
 const GAP = 12;
 const PER_ROW = 3;
-const CAPTION_H = 22;
+const CAPTION_H = 32;
 const CELL_H = THUMB + CAPTION_H + GAP;
 
 // Structural on purpose (not Prisma's Photo type) so callers with a
@@ -24,8 +24,19 @@ const CELL_H = THUMB + CAPTION_H + GAP;
 export interface PdfGridPhoto {
   filePath: string;
   takenAt: Date;
+  gpsLat?: number | null;
+  gpsLng?: number | null;
+  gpsAccuracy?: number | null;
 }
 
+function formatPhotoGps(lat?: number | null, lng?: number | null, accuracy?: number | null): string {
+  if (lat == null || lng == null) return "GPS indisponible";
+  return `${lat.toFixed(5)}, ${lng.toFixed(5)}${accuracy != null ? ` (± ${Math.round(accuracy)} m)` : ""}`;
+}
+
+// GPS is always attached to the photo itself, never to its point/entry — see
+// the same rule enforced in PhotoCapture.tsx (web) — so it's drawn here,
+// under each thumbnail, rather than once above the whole grid.
 export function drawPhotoGrid(doc: PDFKit.PDFDocument, photos: PdfGridPhoto[]): void {
   if (photos.length === 0) {
     doc.fontSize(9).fillColor("gray").text("Aucune photo pour ce point.");
@@ -64,6 +75,10 @@ export function drawPhotoGrid(doc: PDFKit.PDFDocument, photos: PdfGridPhoto[]): 
       .fontSize(8)
       .fillColor("gray")
       .text(formatDate(photo.takenAt), x, rowTop + THUMB + 4, { width: THUMB, align: "center" });
+    doc
+      .fontSize(7)
+      .fillColor("gray")
+      .text(formatPhotoGps(photo.gpsLat, photo.gpsLng, photo.gpsAccuracy), x, rowTop + THUMB + 15, { width: THUMB, align: "center" });
     doc.fillColor("black");
   });
 

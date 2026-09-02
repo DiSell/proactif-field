@@ -70,8 +70,10 @@ export async function generateFieldReportPdf(rapportTerrainId: string, generated
     }
 
     doc.fontSize(13).fillColor("black").text(item.titre || "Entrée sans intitulé");
-    const itemGps = formatGps(item.latitude, item.longitude, item.gpsAccuracy);
-    doc.fontSize(9).fillColor("gray").text([formatDate(item.capturedAt), itemGps].filter(Boolean).join("    ·    "));
+    // No item-level GPS line here on purpose: GPS is captured per photo
+    // (RapportTerrainPhoto.gpsLat/Lng), never on the item itself — it's
+    // drawn under each thumbnail in drawPhotoGrid below instead.
+    doc.fontSize(9).fillColor("gray").text(formatDate(item.capturedAt));
     if (item.commentaire) {
       doc.fontSize(10).fillColor("black").text(item.commentaire);
     }
