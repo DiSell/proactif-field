@@ -25,6 +25,9 @@ import ReportsPage from "./pages/ReportsPage";
 import ActivateAccountPage from "./pages/ActivateAccountPage";
 import TechnicianAccountPage from "./pages/TechnicianAccountPage";
 import TechnicianHistoryPage from "./pages/TechnicianHistoryPage";
+import FieldReportsPage from "./pages/FieldReportsPage";
+import FieldReportNewPage from "./pages/FieldReportNewPage";
+import FieldReportDetailPage from "./pages/FieldReportDetailPage";
 
 function RequireAuth({ children }: { children: JSX.Element }) {
   const token = useAuthStore((s) => s.token);
@@ -101,6 +104,9 @@ export default function App() {
           <Route path="/reports" element={<RequireAdmin><ReportsPage /></RequireAdmin>} />
           <Route path="/mon-compte" element={<RequireTechnician><TechnicianAccountPage /></RequireTechnician>} />
           <Route path="/historique" element={<RequireTechnician><TechnicianHistoryPage /></RequireTechnician>} />
+          <Route path="/rapport-terrain" element={<FieldReportsPage />} />
+          <Route path="/rapport-terrain/nouveau" element={<FieldReportNewPage />} />
+          <Route path="/rapport-terrain/:id" element={<FieldReportDetailPage />} />
 
           <Route path="/chantiers/:chantierId" element={<ChantierLayout />}>
             <Route index element={<ChantierOverviewPage />} />

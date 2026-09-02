@@ -1,0 +1,94 @@
+/* Rapport terrain — "mode simple", independent of chantiers/plans/points */
+
+.field-reports-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.field-report-list {
+  display: grid;
+  gap: 10px;
+}
+
+.field-report-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.field-report-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--warn-bg, #fff4cc);
+  color: #8a5a00;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.field-report-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: 6px;
+  color: var(--ink-muted, #5C5A52);
+  font-size: 12px;
+}
+
+.field-report-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 16px;
+}
+
+.field-report-summary {
+  margin-bottom: 16px;
+}
+
+.field-report-summary .detail-list {
+  grid-template-columns: 1fr 1fr;
+}
+
+.field-report-main-capture {
+  margin: 4px 0 20px;
+  min-height: 58px;
+  background: #2167d5;
+  border-color: #2167d5;
+  color: #fff;
+  font-size: 15px;
+}
+
+.field-report-item-list {
+  display: grid;
+  gap: 12px;
+}
+
+.field-report-item-card .photo-section {
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.gps-status {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ink-muted, #5C5A52);
+}
+
+.gps-status-found { color: #247542; }
+.gps-status-unavailable { color: #a32b25; }
+
+@media (max-width: 580px) {
+  .field-reports-head { flex-direction: column; align-items: stretch; }
+  .field-report-summary .detail-list { grid-template-columns: 1fr; }
+}

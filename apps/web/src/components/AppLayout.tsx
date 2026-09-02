@@ -27,7 +27,10 @@ export default function AppLayout() {
   const isTechnician = user?.role === UserRole.TECHNICIEN;
   const isTerrainRoute = /^\/chantiers\/[^/]+\/plans/.test(location.pathname);
 
-  const mainItems: NavItem[] = [{ to: "/", label: isTechnician ? "Mes chantiers" : "Chantiers", icon: "chantier", end: true }];
+  const mainItems: NavItem[] = [
+    { to: "/", label: isTechnician ? "Mes chantiers" : "Chantiers", icon: "chantier", end: true },
+    { to: "/rapport-terrain", label: "Rapport terrain", icon: "camera" },
+  ];
   if (isAdmin) mainItems.unshift({ to: "/dashboard", label: "Tableau de bord", icon: "dashboard" });
   if (isTechnician) mainItems.push(
     { to: "/historique", label: "Historique", icon: "report" },

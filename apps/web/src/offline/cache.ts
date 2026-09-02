@@ -1,9 +1,11 @@
 import { apiFetchBlob } from "../api/client";
 
-const cacheName = (userId: string) => `proactif-field-private-${userId}`;
-const cacheKey = (userId: string, kind: "plans" | "photos", id: string) => new Request(`${location.origin}/__offline/${encodeURIComponent(userId)}/${kind}/${id}`);
+export type CacheableFileKind = "plans" | "photos" | "rapport-terrain-photos";
 
-export async function cacheProtectedFile(userId: string, kind: "plans" | "photos", id: string): Promise<Blob> {
+const cacheName = (userId: string) => `proactif-field-private-${userId}`;
+const cacheKey = (userId: string, kind: CacheableFileKind, id: string) => new Request(`${location.origin}/__offline/${encodeURIComponent(userId)}/${kind}/${id}`);
+
+export async function cacheProtectedFile(userId: string, kind: CacheableFileKind, id: string): Promise<Blob> {
   const cache = await caches.open(cacheName(userId));
   const key = cacheKey(userId, kind, id);
   const existing = await cache.match(key);
@@ -13,12 +15,12 @@ export async function cacheProtectedFile(userId: string, kind: "plans" | "photos
   return blob;
 }
 
-export async function getCachedFile(userId: string, kind: "plans" | "photos", id: string): Promise<Blob | null> {
+export async function getCachedFile(userId: string, kind: CacheableFileKind, id: string): Promise<Blob | null> {
   const response = await (await caches.open(cacheName(userId))).match(cacheKey(userId, kind, id));
   return response ? response.blob() : null;
 }
 
-export async function cacheLocalFile(userId: string, kind: "plans" | "photos", id: string, blob: Blob): Promise<void> {
+export async function cacheLocalFile(userId: string, kind: CacheableFileKind, id: string, blob: Blob): Promise<void> {
   await (await caches.open(cacheName(userId))).put(cacheKey(userId, kind, id), new Response(blob, { headers: { "Content-Type": blob.type || "application/octet-stream" } }));
 }
 

@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { BlocageTracePoint, PointDTO, PointStatut } from "@proactif-field/shared";
 import { useDeletePoint, usePhotos, useUpdatePoint } from "../api/hooks";
-import { useFileObjectUrl } from "../api/files";
 import {
   addPendingPhoto,
   getPendingPhotosForPoint,
@@ -15,6 +14,7 @@ import { useAuthStore } from "../auth/store";
 import AutocompleteInput from "./AutocompleteInput";
 import Icon from "./Icon";
 import PointBlocages from "./PointBlocages";
+import PhotoCapture, { PhotoCaptureItem } from "./PhotoCapture";
 
 interface Props {
   planId: string;
@@ -32,23 +32,12 @@ interface Props {
   initialBlocageOpen?: boolean;
 }
 
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
-}
-
-interface LightboxState {
-  url: string;
-  caption: string;
-}
-
 export default function PointFiche({ planId, point, onClose, canCapture = true, displayMode = "sheet", hidden = false, blockageStart, blockageFlexions = [], onPickBlockageStart, onPickFlexion, onUndoFlexion, onClearFlexions, initialBlocageOpen = false }: Props) {
   const updatePoint = useUpdatePoint(planId);
   const deletePoint = useDeletePoint(planId);
   const { data: photos } = usePhotos(point.id);
   const [pending, setPending] = useState<PendingPhoto[]>([]);
   const [capturing, setCapturing] = useState(false);
-  const [lightbox, setLightbox] = useState<LightboxState | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const userId = useAuthStore((state) => state.user?.id);
 
   const [identifiant, setIdentifiant] = useState(point.identifiant);
@@ -71,10 +60,8 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
     updatePoint.mutate({ id: point.id, input: { statut } });
   }
 
-  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file || !userId) return;
+  async function handleCapture(file: File) {
+    if (!userId) return;
 
     setCapturing(true);
     const pendingId = crypto.randomUUID();
@@ -189,165 +176,23 @@ export default function PointFiche({ planId, point, onClose, canCapture = true, 
 
         <PointBlocages planId={planId} point={point} blockageStart={blockageStart} blockageFlexions={blockageFlexions} onPickBlockageStart={onPickBlockageStart} onPickFlexion={onPickFlexion} onUndoFlexion={onUndoFlexion} onClearFlexions={onClearFlexions} initialFormOpen={initialBlocageOpen} />
 
-        <div className="photo-section point-photo-section">
-          <h3 className="photo-section-title">Photos du point ({(photos?.length ?? 0) + pending.length})</h3>
-
-          {(photos?.length ?? 0) + pending.length === 0 ? (
-            <p className="photo-section-empty">Aucune photo pour l'instant.</p>
-          ) : (
-            <div className="photo-grid">
-              {photos?.map((photo) => (
-                <PhotoThumb
-                  key={photo.id}
-                  photoId={photo.id}
-                  takenAt={photo.takenAt}
-                  onOpen={(url) => setLightbox({ url, caption: formatDateTime(photo.takenAt) })}
-                />
-              ))}
-              {pending.map((p) => (
-                <PendingThumb
-                  key={p.id}
-                  photo={p}
-                  onCancel={() => cancelPending(p.id)}
-                  onOpen={(url) => setLightbox({ url, caption: formatDateTime(p.takenAt) })}
-                />
-              ))}
-            </div>
-          )}
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            style={{ display: "none" }}
-            onChange={handleFileSelected}
-          />
-          {canCapture && <button
-            className="btn block photo-capture-btn"
-            disabled={capturing}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {!capturing && <Icon name="camera" />}{capturing ? "Enregistrement…" : "Prendre une photo"}
-          </button>}
-        </div>
+        <PhotoCapture
+          fileKind="photos"
+          title="Photos du point"
+          canCapture={canCapture}
+          capturing={capturing}
+          onCapture={handleCapture}
+          onCancelPending={cancelPending}
+          photos={[
+            ...(photos ?? []).map((photo): PhotoCaptureItem => ({ id: photo.id, takenAt: photo.takenAt })),
+            ...pending.map((p): PhotoCaptureItem => ({ id: p.id, takenAt: p.takenAt, pending: true, blob: new Blob([p.arrayBuffer], { type: p.mimeType }) })),
+          ]}
+        />
 
         <button className="btn danger block point-delete-button" onClick={handleDeletePoint} style={{ marginTop: 16 }}>
           Supprimer ce point
         </button>
       </div>
-
-      {lightbox && <PhotoLightbox state={lightbox} onClose={() => setLightbox(null)} />}
-    </div>
-  );
-}
-
-function PhotoLightbox({ state, onClose }: { state: LightboxState; onClose: () => void }) {
-  return (
-    <div className="lightbox-overlay" onClick={onClose}>
-      <button className="lightbox-close" onClick={onClose} aria-label="Fermer">
-        <Icon name="close" />
-      </button>
-      <img src={state.url} alt="" onClick={(e) => e.stopPropagation()} />
-      <div className="lightbox-caption">{state.caption}</div>
-    </div>
-  );
-}
-
-function PhotoThumb({
-  photoId,
-  takenAt,
-  onOpen,
-}: {
-  photoId: string;
-  takenAt: string;
-  onOpen: (url: string) => void;
-}) {
-  const { url, error, retry } = useFileObjectUrl("photos", photoId);
-  return (
-    <div>
-      {error ? (
-        <button
-          onClick={retry}
-          style={{
-            aspectRatio: 1,
-            width: "100%",
-            background: "var(--paper-2)",
-            borderRadius: 8,
-            border: "none",
-            color: "#fca5a5",
-            fontSize: 11,
-          }}
-        >
-          Échec — réessayer
-        </button>
-      ) : url ? (
-        <img src={url} alt="" onClick={() => onOpen(url)} style={{ cursor: "pointer" }} />
-      ) : (
-        <div style={{ aspectRatio: 1, background: "var(--paper-2)" }} />
-      )}
-      <div className="photo-meta">{formatDateTime(takenAt)}</div>
-    </div>
-  );
-}
-
-function PendingThumb({
-  photo,
-  onCancel,
-  onOpen,
-}: {
-  photo: PendingPhoto;
-  onCancel: () => void;
-  onOpen: (url: string) => void;
-}) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    const blob = new Blob([photo.arrayBuffer], { type: photo.mimeType });
-    const objectUrl = URL.createObjectURL(blob);
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [photo.arrayBuffer, photo.mimeType]);
-
-  return (
-    <div>
-      <div style={{ position: "relative" }}>
-        {url && <img src={url} alt="" onClick={() => onOpen(url)} style={{ cursor: "pointer" }} />}
-        <div
-          style={{
-            position: "absolute",
-            top: 4,
-            left: 4,
-            background: "rgba(245,158,11,0.9)",
-            color: "#111",
-            fontSize: 9,
-            fontWeight: 700,
-            padding: "1px 5px",
-            borderRadius: 4,
-          }}
-        >
-          en attente
-        </div>
-        <button
-          onClick={onCancel}
-          style={{
-            position: "absolute",
-            top: 4,
-            right: 4,
-            background: "rgba(0,0,0,0.6)",
-            color: "white",
-            border: "none",
-            borderRadius: "50%",
-            width: 20,
-            height: 20,
-            fontSize: 12,
-            lineHeight: "20px",
-            padding: 0,
-          }}
-        >
-          <Icon name="close" size={14} />
-        </button>
-      </div>
-      <div className="photo-meta">{formatDateTime(photo.takenAt)}</div>
     </div>
   );
 }

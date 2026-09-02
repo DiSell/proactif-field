@@ -3,7 +3,7 @@ import { apiFetchBlob } from "./client";
 import { useAuthStore } from "../auth/store";
 import { cacheProtectedFile, getCachedFile } from "../offline/cache";
 
-type FileKind = "plans" | "photos" | "reports";
+type FileKind = "plans" | "photos" | "reports" | "rapport-terrain-photos" | "rapport-terrain-pdfs";
 
 const blobUrlCache = new Map<string, Promise<string>>();
 
@@ -13,7 +13,7 @@ export function getFileObjectUrl(kind: FileKind, id: string): Promise<string> {
   if (!cached) {
     cached = (async () => {
       const userId = useAuthStore.getState().user?.id;
-      if (userId && (kind === "plans" || kind === "photos")) {
+      if (userId && (kind === "plans" || kind === "photos" || kind === "rapport-terrain-photos")) {
         const local = await getCachedFile(userId, kind, id);
         if (local) return URL.createObjectURL(local);
         if (!navigator.onLine) throw new Error("Fichier non disponible hors ligne");

@@ -354,6 +354,106 @@ export interface UpdateMaterielInput {
   commentaire?: string | null;
 }
 
+// "Mode simple" — a field report is never linked to a Chantier/Plan/Point.
+// See apps/api/src/modules/rapports-terrain.
+export interface RapportTerrainPhotoDTO {
+  id: string;
+  rapportTerrainItemId: string;
+  takenAt: string;
+  gpsLat: number | null;
+  gpsLng: number | null;
+  gpsAccuracy: number | null;
+  createdAt: string;
+}
+
+export interface RapportTerrainItemDTO {
+  id: string;
+  rapportTerrainId: string;
+  createdById: string;
+  createdByName: string;
+  titre: string | null;
+  commentaire: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  gpsAccuracy: number | null;
+  capturedAt: string;
+  photos: RapportTerrainPhotoDTO[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RapportTerrainDTO {
+  id: string;
+  organizationId: string;
+  createdById: string;
+  createdByName: string;
+  nom: string;
+  typeTravaux: string | null;
+  observation: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  gpsAccuracy: number | null;
+  lieu: string | null;
+  items: RapportTerrainItemDTO[];
+  itemCount: number;
+  photoCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRapportTerrainInput {
+  id?: string;
+  nom: string;
+  typeTravaux?: string | null;
+  observation?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  gpsAccuracy?: number | null;
+  lieu?: string | null;
+}
+
+export interface UpdateRapportTerrainInput {
+  nom?: string;
+  typeTravaux?: string | null;
+  observation?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  gpsAccuracy?: number | null;
+  lieu?: string | null;
+}
+
+export interface CreateRapportTerrainItemInput {
+  id?: string;
+  titre?: string | null;
+  commentaire?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  gpsAccuracy?: number | null;
+  capturedAt?: string;
+}
+
+export interface UpdateRapportTerrainItemInput {
+  titre?: string | null;
+  commentaire?: string | null;
+}
+
+export interface RapportTerrainPdfDTO {
+  id: string;
+  rapportTerrainId: string;
+  generatedAt: string;
+  generatedById: string;
+  generatedByName: string;
+}
+
+// Abstraction for "lieu" auto-fill from GPS coordinates. `label` is what
+// gets stored on RapportTerrain.lieu when a provider is configured; no
+// provider is wired up yet (see reverseGeocode in
+// apps/api/src/modules/rapports-terrain/geocoding.ts) — GPS coordinates
+// always work standalone, with or without this.
+export interface ReverseGeocodeResult {
+  label: string;
+}
+
 export interface CreateUserInput {
   name: string;
   email: string;

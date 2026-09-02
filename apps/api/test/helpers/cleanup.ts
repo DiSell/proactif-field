@@ -8,6 +8,9 @@ import { prisma } from "../../src/config/db";
 // must be cleared before the Organization row itself.
 export async function cleanupOrganization(organizationId: string): Promise<void> {
   await prisma.chantier.deleteMany({ where: { organizationId } });
+  // RapportTerrain is org-rooted (no chantier), so it needs its own pass —
+  // RapportTerrainItem/Photo/Pdf/ActivityLog cascade from it (schema.prisma).
+  await prisma.rapportTerrain.deleteMany({ where: { organizationId } });
   await prisma.termValue.deleteMany({ where: { organizationId } });
   await prisma.user.deleteMany({ where: { organizationId } });
   await prisma.organization.deleteMany({ where: { id: organizationId } });

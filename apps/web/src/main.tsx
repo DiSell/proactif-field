@@ -7,6 +7,7 @@ import { queryClient } from "./api/queryClient";
 import "./index.css";
 import "./offline.css";
 import "./points.css";
+import "./field-reports.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

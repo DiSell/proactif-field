@@ -2,14 +2,13 @@ import PDFDocument from "pdfkit";
 import fs from "fs";
 import crypto from "crypto";
 import path from "path";
-import { Photo } from "@prisma/client";
 import { prisma } from "../../config/db";
 import { HttpError } from "../../middleware/errorHandler";
 import { ensureUploadSubdir, absolutePathFor } from "../../utils/storage";
 import sharp from "sharp";
 import { logActivityAsync } from "../activity/service";
 
-function formatDate(date: Date): string {
+export function formatDate(date: Date): string {
   return date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 }
 
@@ -19,7 +18,15 @@ const PER_ROW = 3;
 const CAPTION_H = 22;
 const CELL_H = THUMB + CAPTION_H + GAP;
 
-function drawPhotoGrid(doc: PDFKit.PDFDocument, photos: Photo[]): void {
+// Structural on purpose (not Prisma's Photo type) so callers with a
+// differently-shaped photo record — e.g. RapportTerrainPhoto, which has no
+// pointId/blocageId — can reuse this without an unrelated-fields mismatch.
+export interface PdfGridPhoto {
+  filePath: string;
+  takenAt: Date;
+}
+
+export function drawPhotoGrid(doc: PDFKit.PDFDocument, photos: PdfGridPhoto[]): void {
   if (photos.length === 0) {
     doc.fontSize(9).fillColor("gray").text("Aucune photo pour ce point.");
     doc.fillColor("black");
@@ -142,6 +149,19 @@ function drawPlanBlocageOverview(doc: PDFKit.PDFDocument, plan: { filePath: stri
   doc.fillColor("black"); doc.y = y + height + 12;
 }
 
+// Shared masthead — logo, name, address, contact — drawn identically at the
+// top of every generated PDF (chantier reports and field reports alike).
+export async function drawOrganizationHeader(doc: PDFKit.PDFDocument, organization: { logoPath: string | null; name: string; address: string | null; postalCode: string | null; city: string | null; country: string | null; phone: string | null; contactEmail: string | null }): Promise<void> {
+  if (organization.logoPath) {
+    try { const logo = await sharp(absolutePathFor(organization.logoPath)).resize({ width: 150, height: 70, fit: "inside" }).png().toBuffer(); doc.image(logo, { fit: [150, 70] }); doc.moveDown(0.5); } catch { /* Le rapport reste générable si un ancien logo est illisible. */ }
+  }
+  doc.fontSize(13).text(organization.name);
+  const organizationAddress = [organization.address, [organization.postalCode, organization.city].filter(Boolean).join(" "), organization.country].filter(Boolean).join(" · ");
+  if (organizationAddress) doc.fontSize(9).fillColor("gray").text(organizationAddress);
+  if (organization.phone || organization.contactEmail) doc.fontSize(9).fillColor("gray").text([organization.phone, organization.contactEmail].filter(Boolean).join(" · "));
+  doc.fillColor("black");
+}
+
 export async function generateChantierReport(chantierId: string, generatedById: string) {
   const chantier = await prisma.chantier.findUnique({
     where: { id: chantierId },
@@ -171,13 +191,7 @@ export async function generateChantierReport(chantierId: string, generatedById: 
   const stream = fs.createWriteStream(absPath);
   doc.pipe(stream);
 
-  if (chantier.organization.logoPath) {
-    try { const logo = await sharp(absolutePathFor(chantier.organization.logoPath)).resize({ width: 150, height: 70, fit: "inside" }).png().toBuffer(); doc.image(logo, { fit: [150, 70] }); doc.moveDown(0.5); } catch { /* Le rapport reste générable si un ancien logo est illisible. */ }
-  }
-  doc.fontSize(13).text(chantier.organization.name);
-  const organizationAddress = [chantier.organization.address, [chantier.organization.postalCode, chantier.organization.city].filter(Boolean).join(" "), chantier.organization.country].filter(Boolean).join(" · ");
-  if (organizationAddress) doc.fontSize(9).fillColor("gray").text(organizationAddress);
-  if (chantier.organization.phone || chantier.organization.contactEmail) doc.fontSize(9).fillColor("gray").text([chantier.organization.phone, chantier.organization.contactEmail].filter(Boolean).join(" · "));
+  await drawOrganizationHeader(doc, chantier.organization);
   doc.moveDown().fillColor("black").fontSize(20).text(chantier.name, { underline: true });
   if (chantier.address) doc.fontSize(11).text(chantier.address);
   if (chantier.description) doc.fontSize(11).text(chantier.description);

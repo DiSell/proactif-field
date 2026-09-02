@@ -80,6 +80,9 @@ model Organization {
   blocages     Blocage[]
   activityLogs ActivityLog[]
   materiels    Materiel[]
+  rapportsTerrain            RapportTerrain[]
+  rapportTerrainItems        RapportTerrainItem[]
+  rapportTerrainActivityLogs RapportTerrainActivityLog[]
 }
 
 model User {
@@ -111,6 +114,10 @@ model User {
   pushSubscriptions    PushSubscription[]
   materielsCreated     Materiel[]           @relation("MaterielCreatedBy")
   materielsUpdated     Materiel[]           @relation("MaterielUpdatedBy")
+  rapportsTerrainCreated      RapportTerrain[]            @relation("RapportTerrainCreatedBy")
+  rapportTerrainItemsCreated  RapportTerrainItem[]        @relation("RapportTerrainItemCreatedBy")
+  rapportTerrainPdfsGenerated RapportTerrainPdf[]         @relation("RapportTerrainPdfGeneratedBy")
+  rapportTerrainActivityLogs  RapportTerrainActivityLog[] @relation("RapportTerrainActivityLogUser")
 }
 
 model PushSubscription {
@@ -365,4 +372,100 @@ model Report {
   generatedById String
   generatedBy   User     @relation(fields: [generatedById], references: [id])
   generatedAt   DateTime @default(now())
+}
+
+// "Mode simple" — independent of Chantier/Plan/Point on purpose (see
+// modules/rapports-terrain). A quick field report a technician can create
+// without any plan: a header (who/when/where/what) plus an ordered list of
+// photographed entries. Never linked to a Chantier; do not add that FK.
+model RapportTerrain {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdById    String
+  createdBy      User         @relation("RapportTerrainCreatedBy", fields: [createdById], references: [id])
+  nom            String
+  typeTravaux    String?
+  observation    String?
+  latitude       Float?
+  longitude      Float?
+  gpsAccuracy    Float?
+  lieu           String?
+  items          RapportTerrainItem[]
+  pdfs           RapportTerrainPdf[]
+  activityLogs   RapportTerrainActivityLog[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([organizationId, createdAt])
+  @@index([createdById, createdAt])
+}
+
+// One photographed entry within a RapportTerrain — the "Prendre une photo"
+// unit. Deliberately has no x/y and no statut/blocage: those are plan
+// concepts (see Point) that don't apply to a planless report.
+model RapportTerrainItem {
+  id               String         @id @default(cuid())
+  rapportTerrainId String
+  rapportTerrain   RapportTerrain @relation(fields: [rapportTerrainId], references: [id], onDelete: Cascade)
+  organizationId   String
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+  createdById      String
+  createdBy        User           @relation("RapportTerrainItemCreatedBy", fields: [createdById], references: [id])
+  titre            String?
+  commentaire      String?
+  latitude         Float?
+  longitude        Float?
+  gpsAccuracy      Float?
+  capturedAt       DateTime       @default(now())
+  photos           RapportTerrainPhoto[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([rapportTerrainId, createdAt])
+}
+
+model RapportTerrainPhoto {
+  id                   String             @id @default(cuid())
+  rapportTerrainItemId String
+  rapportTerrainItem   RapportTerrainItem @relation(fields: [rapportTerrainItemId], references: [id], onDelete: Cascade)
+  filePath             String
+  takenAt              DateTime
+  gpsLat               Float?
+  gpsLng               Float?
+  gpsAccuracy          Float?
+  createdAt            DateTime           @default(now())
+
+  @@index([rapportTerrainItemId])
+}
+
+// History of generated PDFs for a RapportTerrain — mirrors Report, kept
+// separate because Report.chantierId is required and this report has none.
+model RapportTerrainPdf {
+  id               String         @id @default(cuid())
+  rapportTerrainId String
+  rapportTerrain   RapportTerrain @relation(fields: [rapportTerrainId], references: [id], onDelete: Cascade)
+  filePath         String
+  generatedById    String
+  generatedBy      User           @relation("RapportTerrainPdfGeneratedBy", fields: [generatedById], references: [id])
+  generatedAt      DateTime       @default(now())
+}
+
+// Audit trail scoped to RapportTerrain, kept separate from ActivityLog
+// because that table's chantierId is required — see modules/rapports-terrain/activity.ts.
+model RapportTerrainActivityLog {
+  id               String         @id @default(cuid())
+  organizationId   String
+  organization     Organization   @relation(fields: [organizationId], references: [id])
+  rapportTerrainId String
+  rapportTerrain   RapportTerrain @relation(fields: [rapportTerrainId], references: [id], onDelete: Cascade)
+  userId           String
+  user             User           @relation("RapportTerrainActivityLogUser", fields: [userId], references: [id])
+  action           String
+  description      String?
+  metadata         Json?
+  createdAt        DateTime       @default(now())
+
+  @@index([rapportTerrainId, createdAt])
+  @@index([organizationId, createdAt])
 }

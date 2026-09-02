@@ -1,8 +1,8 @@
 import { openDB } from "idb";
-import { ChantierSyncDTO } from "@proactif-field/shared";
+import { ChantierSyncDTO, RapportTerrainDTO } from "@proactif-field/shared";
 
 const DB_NAME = "proactif-field-offline";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 export interface PendingPhoto {
   id: string;
@@ -26,7 +26,26 @@ export type OfflineOperationType =
   | "BLOCAGE_CREATE"
   | "BLOCAGE_UPDATE"
   | "PHOTO_BLOCAGE_CREATE"
-  | "MATERIEL_UPDATE";
+  | "MATERIEL_UPDATE"
+  | "FIELD_REPORT_CREATE"
+  | "FIELD_REPORT_UPDATE"
+  | "FIELD_REPORT_DELETE"
+  | "FIELD_REPORT_ITEM_CREATE"
+  | "FIELD_REPORT_ITEM_UPDATE"
+  | "FIELD_REPORT_PHOTO_CREATE";
+
+// Operation types whose sync side-effect is "go refresh this chantier's
+// snapshot" (see syncManager.ts). Field reports have no chantier snapshot,
+// so their operations are deliberately excluded from that refresh set.
+export const CHANTIER_OPERATION_TYPES: readonly OfflineOperationType[] = [
+  "POINT_CREATE",
+  "POINT_UPDATE",
+  "PHOTO_CREATE",
+  "BLOCAGE_CREATE",
+  "BLOCAGE_UPDATE",
+  "PHOTO_BLOCAGE_CREATE",
+  "MATERIEL_UPDATE",
+];
 
 export interface OfflineOperation {
   id: string;
@@ -47,6 +66,19 @@ export interface OfflineSnapshotRecord {
   chantierId: string;
   snapshot: ChantierSyncDTO;
   updatedAt: string;
+}
+
+// A field report's local copy is the source of truth on this device — unlike
+// chantier snapshots (a cache refreshed from a server that stays
+// authoritative), a report created offline has nowhere else to live until
+// it syncs. `dirty` marks a record with operations still pending, so an
+// online refresh (see offline/fieldReports.ts) never overwrites local edits
+// that haven't reached the server yet.
+export interface LocalFieldReportRecord {
+  id: string;
+  userId: string;
+  dirty: boolean;
+  rapport: RapportTerrainDTO;
 }
 
 const dbPromise = openDB(DB_NAME, DB_VERSION, {
@@ -70,6 +102,10 @@ const dbPromise = openDB(DB_NAME, DB_VERSION, {
       const store = db.createObjectStore("operations", { keyPath: "id" });
       store.createIndex("by-user", "userId");
       store.createIndex("by-created", "createdAt");
+    }
+    if (!db.objectStoreNames.contains("fieldReports")) {
+      const store = db.createObjectStore("fieldReports", { keyPath: "id" });
+      store.createIndex("by-user", "userId");
     }
   },
 });
@@ -136,16 +172,31 @@ export async function getOperations(userId?: string): Promise<OfflineOperation[]
 export async function putOperation(operation: OfflineOperation): Promise<void> { await (await dbPromise).put("operations", operation); }
 export async function removeOperation(id: string): Promise<void> { await (await dbPromise).delete("operations", id); }
 
+export async function putLocalFieldReport(record: LocalFieldReportRecord): Promise<void> { await (await dbPromise).put("fieldReports", record); }
+export async function getLocalFieldReport(userId: string, id: string): Promise<LocalFieldReportRecord | undefined> {
+  const record = await (await dbPromise).get("fieldReports", id) as LocalFieldReportRecord | undefined;
+  return record?.userId === userId ? record : undefined;
+}
+export async function getLocalFieldReports(userId: string): Promise<LocalFieldReportRecord[]> {
+  return (await dbPromise).getAllFromIndex("fieldReports", "by-user", userId);
+}
+export async function removeLocalFieldReport(id: string): Promise<void> { await (await dbPromise).delete("fieldReports", id); }
+
 export async function clearOfflineData(userId?: string): Promise<void> {
   const db = await dbPromise;
   if (!userId) {
-    await Promise.all([db.clear("snapshots"), db.clear("operations"), db.clear("pendingPhotos")]);
+    await Promise.all([db.clear("snapshots"), db.clear("operations"), db.clear("pendingPhotos"), db.clear("fieldReports")]);
     return;
   }
-  const tx = db.transaction(["snapshots", "operations"], "readwrite");
+  const tx = db.transaction(["snapshots", "operations", "fieldReports"], "readwrite");
   const snapshots = await tx.objectStore("snapshots").index("by-user").getAllKeys(userId);
   const operations = await tx.objectStore("operations").index("by-user").getAllKeys(userId);
-  await Promise.all([...snapshots.map((key) => tx.objectStore("snapshots").delete(key)), ...operations.map((key) => tx.objectStore("operations").delete(key))]);
+  const fieldReports = await tx.objectStore("fieldReports").index("by-user").getAllKeys(userId);
+  await Promise.all([
+    ...snapshots.map((key) => tx.objectStore("snapshots").delete(key)),
+    ...operations.map((key) => tx.objectStore("operations").delete(key)),
+    ...fieldReports.map((key) => tx.objectStore("fieldReports").delete(key)),
+  ]);
   await tx.done;
   // Le store historique n'avait pas de propriétaire : on le purge pour ne
   // jamais exposer les photos d'une session au prochain utilisateur.

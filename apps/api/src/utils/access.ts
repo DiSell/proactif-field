@@ -76,3 +76,39 @@ export async function assertBlocageAccess(blocageId: string, auth: AuthContext):
   await assertChantierAccess(blocage.chantierId, auth);
   return blocage;
 }
+
+// Field reports have no chantier/plan to scope by, so access is: same
+// organization, and for a TECHNICIEN, ownership (createdById) — an ADMIN
+// sees and manages every report in their organization, same as they do for
+// chantiers. 404 (never 403) on a mismatch, same rationale as above.
+export async function assertRapportTerrainAccess(rapportTerrainId: string, auth: AuthContext): Promise<{ organizationId: string; createdById: string }> {
+  const rapport = await prisma.rapportTerrain.findUnique({ where: { id: rapportTerrainId }, select: { organizationId: true, createdById: true } });
+  if (!rapport || rapport.organizationId !== auth.organizationId) {
+    throw new HttpError(404, "Rapport terrain introuvable");
+  }
+  if (auth.role === "TECHNICIEN" && rapport.createdById !== auth.userId) {
+    throw new HttpError(404, "Rapport terrain introuvable");
+  }
+  return rapport;
+}
+
+export async function assertRapportTerrainItemAccess(itemId: string, auth: AuthContext): Promise<{ rapportTerrainId: string; organizationId: string; createdById: string }> {
+  const item = await prisma.rapportTerrainItem.findUnique({ where: { id: itemId }, select: { rapportTerrainId: true } });
+  if (!item) throw new HttpError(404, "Entrée introuvable");
+  const rapport = await assertRapportTerrainAccess(item.rapportTerrainId, auth);
+  return { rapportTerrainId: item.rapportTerrainId, ...rapport };
+}
+
+export async function assertRapportTerrainPhotoAccess(photoId: string, auth: AuthContext): Promise<{ rapportTerrainItemId: string }> {
+  const photo = await prisma.rapportTerrainPhoto.findUnique({ where: { id: photoId }, select: { rapportTerrainItemId: true } });
+  if (!photo) throw new HttpError(404, "Photo introuvable");
+  await assertRapportTerrainItemAccess(photo.rapportTerrainItemId, auth);
+  return photo;
+}
+
+export async function assertRapportTerrainPdfAccess(pdfId: string, auth: AuthContext): Promise<{ rapportTerrainId: string }> {
+  const pdf = await prisma.rapportTerrainPdf.findUnique({ where: { id: pdfId }, select: { rapportTerrainId: true } });
+  if (!pdf) throw new HttpError(404, "Rapport introuvable");
+  await assertRapportTerrainAccess(pdf.rapportTerrainId, auth);
+  return pdf;
+}

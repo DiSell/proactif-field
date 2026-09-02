@@ -35,6 +35,7 @@ function makeUploader(subdir: string, allowedExtensions: string[], maxSize = 25 
 
 export const uploadPlan = makeUploader("plans", [".pdf", ".png", ".jpg", ".jpeg", ".svg"]);
 export const uploadPhoto = makeUploader("photos", [".png", ".jpg", ".jpeg", ".webp", ".heic"]);
+export const uploadRapportTerrainPhoto = makeUploader("rapport-terrain-photos", [".png", ".jpg", ".jpeg", ".webp", ".heic"]);
 export const uploadOrganizationLogo = makeUploader("organization-logos", [".png", ".jpg", ".jpeg", ".webp"], 2 * 1024 * 1024, ["image/png", "image/jpeg", "image/webp"]);
 export const uploadDocument = makeUploader("documents", [
   ".pdf",
