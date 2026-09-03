@@ -16,6 +16,7 @@ import { toRapportTerrainDTO, toRapportTerrainItemDTO, toRapportTerrainPdfDTO } 
 import { logRapportTerrainActivityAsync } from "./activity";
 import { generateFieldReportPdf } from "./service";
 import { reverseGeocode } from "./geocoding";
+import { streamFieldReportExport } from "./export";
 
 const withRelations = {
   include: {
@@ -137,6 +138,17 @@ rapportsTerrainRouter.get(
     const rapport = await prisma.rapportTerrain.findUnique({ where: { id: req.params.id }, ...withRelations });
     if (!rapport) throw new HttpError(404, "Rapport terrain introuvable");
     res.json({ rapportTerrain: toRapportTerrainDTO(rapport) });
+  })
+);
+
+// Full-fidelity export (.zip: original photos + a plain-text info file) —
+// for handing the report to someone who has no account and just needs the
+// raw material for their own folder. See export.ts for the rationale.
+rapportsTerrainRouter.get(
+  "/:id/export",
+  asyncHandler(async (req, res) => {
+    await assertRapportTerrainAccess(req.params.id, req.auth!);
+    await streamFieldReportExport(req.params.id, res);
   })
 );
 

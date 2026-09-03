@@ -10,7 +10,7 @@ import {
   useGenerateFieldReportPdf,
   useUpdateFieldReport,
 } from "../api/fieldReportHooks";
-import { apiFetchArrayBuffer } from "../api/client";
+import { apiFetchArrayBuffer, apiFetchBlob } from "../api/client";
 import { addLocalFieldReportItemPhoto, updateLocalFieldReportItemPhotoGps } from "../offline/fieldReports";
 import { trySync } from "../offline/syncManager";
 import { getCurrentPositionSafe } from "../utils/geolocation";
@@ -47,6 +47,8 @@ export default function FieldReportDetailPage() {
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
   const [openingPdf, setOpeningPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleMainCapture(e: React.ChangeEvent<HTMLInputElement>) {
@@ -143,6 +145,30 @@ export default function FieldReportDetailPage() {
     }
   }
 
+  // The PDF flattens photos into small embedded thumbnails — fine to read,
+  // not something a recipient can easily pull individual full-size files
+  // out of. This downloads a .zip with the original photos plus a plain
+  // text file of every field, so anyone who receives it (with or without
+  // an account) can drop everything straight into their own folder.
+  async function handleExport() {
+    if (!id) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const blob = await apiFetchBlob(`/api/rapports-terrain/${id}/export`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(rapport?.nom ?? "rapport-terrain").replace(/[^a-z0-9]+/gi, "-")}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Échec de l'export.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   if (isError) {
     return (
       <div className="page">
@@ -225,6 +251,13 @@ export default function FieldReportDetailPage() {
         </div>
       )}
       {pdfBuffer && <ReportPreview arrayBuffer={pdfBuffer} onClose={() => setPdfBuffer(null)} onDownload={downloadPdf} onShare={sharePdf} />}
+
+      <div className="section-title" style={{ marginTop: 22 }}>Export complet</div>
+      <p className="photo-section-empty" style={{ marginTop: 0 }}>Photos en taille originale + toutes les informations en texte — pour que le destinataire puisse les extraire dans son propre dossier, même sans compte.</p>
+      {exportError && <div className="error-banner">{exportError}</div>}
+      <button className="btn secondary block" onClick={handleExport} disabled={exporting}>
+        <Icon name="report" /> {exporting ? "Préparation de l'archive…" : "Télécharger les photos et informations (.zip)"}
+      </button>
 
       <button className="btn danger block" style={{ marginTop: 24 }} onClick={handleDelete}>Supprimer ce rapport</button>
     </div>

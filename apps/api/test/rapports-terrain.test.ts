@@ -156,6 +156,48 @@ describe("Rapports terrain", () => {
     expect(response.status).toBe(404);
   });
 
+  it("exporte un rapport terrain en zip (photos + informations)", async () => {
+    const organization = await createOrganization();
+    organizationIds.push(organization.id);
+    const technician = await createUser({ organizationId: organization.id, role: UserRole.TECHNICIEN });
+    const created = await request(app).post("/api/rapports-terrain").set(authHeader(technician)).send({ nom: "Rapport à exporter", observation: "Zone A" });
+    const rapportId = created.body.rapportTerrain.id as string;
+    const item = await request(app).post(`/api/rapports-terrain/${rapportId}/items`).set(authHeader(technician)).send({ titre: "Regard fissuré", commentaire: "À surveiller" });
+    await request(app)
+      .post(`/api/rapports-terrain/items/${item.body.item.id}/photos`)
+      .set(authHeader(technician))
+      .field("takenAt", new Date().toISOString())
+      .field("gpsLat", "48.85")
+      .field("gpsLng", "2.35")
+      .attach("file", Buffer.from("photo export"), { filename: "photo.jpg", contentType: "image/jpeg" });
+
+    const response = await request(app).get(`/api/rapports-terrain/${rapportId}/export`).set(authHeader(technician)).buffer(true).parse((res, cb) => {
+      const chunks: Buffer[] = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => cb(null, Buffer.concat(chunks)));
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("application/zip");
+    expect(response.headers["content-disposition"]).toContain("attachment");
+    expect((response.body as Buffer).length).toBeGreaterThan(100);
+    // A .zip file always starts with the "PK" local-file-header signature.
+    expect((response.body as Buffer).subarray(0, 2).toString()).toBe("PK");
+  });
+
+  it("refuse l'export d'un rapport terrain à une autre organisation", async () => {
+    const orgA = await createOrganization();
+    const orgB = await createOrganization();
+    organizationIds.push(orgA.id, orgB.id);
+    const techA = await createUser({ organizationId: orgA.id, role: UserRole.TECHNICIEN });
+    const adminB = await createUser({ organizationId: orgB.id, role: UserRole.ADMIN });
+    const created = await request(app).post("/api/rapports-terrain").set(authHeader(techA)).send({ nom: "Org A" });
+
+    const response = await request(app).get(`/api/rapports-terrain/${created.body.rapportTerrain.id}/export`).set(authHeader(adminB));
+
+    expect(response.status).toBe(404);
+  });
+
   it("supprime un point (entrée) et ses photos, et ajuste les compteurs du rapport", async () => {
     const organization = await createOrganization();
     organizationIds.push(organization.id);

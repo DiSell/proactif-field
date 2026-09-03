@@ -5,7 +5,7 @@ import path from "path";
 import { prisma } from "../../config/db";
 import { HttpError } from "../../middleware/errorHandler";
 import { ensureUploadSubdir } from "../../utils/storage";
-import { drawOrganizationHeader, drawPhotoGrid, formatDate } from "../reports/service";
+import { drawFooters, drawInfoLine, drawOrganizationHeader, drawPhotoGrid, drawSectionTitle, formatDate, PDF_COLORS } from "../reports/service";
 import { logRapportTerrainActivityAsync } from "./activity";
 
 function formatGps(lat: number | null, lng: number | null, accuracy: number | null): string | null {
@@ -16,9 +16,9 @@ function formatGps(lat: number | null, lng: number | null, accuracy: number | nu
 
 // Dedicated generator — deliberately not a branch of generateChantierReport,
 // which walks chantier → plans → points and would need a fake plan/point to
-// describe a field report's flatter shape. Reuses drawOrganizationHeader /
-// drawPhotoGrid / formatDate from the chantier report module where the
-// output should look identical (masthead, date formatting, photo grid).
+// describe a field report's flatter shape. Reuses the same masthead, photo
+// grid, section-title and footer helpers so the two report types look like
+// one consistent product, not two different tools bolted together.
 export async function generateFieldReportPdf(rapportTerrainId: string, generatedById: string) {
   const rapport = await prisma.rapportTerrain.findUnique({
     where: { id: rapportTerrainId },
@@ -37,52 +37,59 @@ export async function generateFieldReportPdf(rapportTerrainId: string, generated
   const fileName = `${crypto.randomUUID()}.pdf`;
   const absPath = path.join(dir, fileName);
 
-  const doc = new PDFDocument({ margin: 50 });
+  const doc = new PDFDocument({ margin: 50, bufferPages: true });
   const stream = fs.createWriteStream(absPath);
   doc.pipe(stream);
 
   await drawOrganizationHeader(doc, rapport.organization);
-  doc.moveDown().fillColor("black").fontSize(20).text(rapport.nom, { underline: true });
 
-  doc.moveDown(0.5);
-  doc.fontSize(10).fillColor("gray").text(`Rapport du ${formatDate(rapport.createdAt)} · ${rapport.createdBy.name}`);
-  if (rapport.typeTravaux) doc.fontSize(10).fillColor("black").text(`Type de travaux : ${rapport.typeTravaux}`);
-  if (rapport.lieu) doc.fontSize(10).fillColor("black").text(`Lieu : ${rapport.lieu}`);
+  doc.font("Helvetica-Bold").fontSize(21).fillColor(PDF_COLORS.ink).text(rapport.nom);
+  doc.font("Helvetica").fillColor(PDF_COLORS.muted).fontSize(9).text(`Rapport du ${formatDate(rapport.createdAt)} · ${rapport.createdBy.name}`);
+  doc.moveDown(0.8);
+
   const gps = formatGps(rapport.latitude, rapport.longitude, rapport.gpsAccuracy);
-  if (gps) doc.fontSize(9).fillColor("gray").text(`GPS : ${gps}`);
-  doc.fillColor("black");
+  if (rapport.typeTravaux) drawInfoLine(doc, "Type de travaux", rapport.typeTravaux);
+  if (rapport.lieu) drawInfoLine(doc, "Lieu", rapport.lieu);
+  if (gps) drawInfoLine(doc, "GPS", gps);
+  doc.moveDown(0.2);
+
   if (rapport.observation) {
-    doc.moveDown(0.5);
-    doc.fontSize(11).fillColor("black").text(rapport.observation);
+    doc.font("Helvetica-Bold").fontSize(8).fillColor(PDF_COLORS.muted).text("OBSERVATION GÉNÉRALE", { characterSpacing: 0.4 });
+    doc.font("Helvetica").fontSize(10.5).fillColor(PDF_COLORS.ink).text(rapport.observation);
+    doc.fillColor("black");
+    doc.moveDown(0.6);
   }
 
+  doc.moveDown(0.3);
+  drawSectionTitle(doc, `Points relevés (${rapport.items.length})`);
+
   if (rapport.items.length === 0) {
-    doc.moveDown();
-    doc.fontSize(11).fillColor("gray").text("Aucune entrée pour ce rapport.");
+    doc.fontSize(11).fillColor(PDF_COLORS.faint).text("Aucune entrée pour ce rapport.");
     doc.fillColor("black");
   }
 
-  for (const item of rapport.items) {
+  rapport.items.forEach((item, index) => {
     if (doc.y > doc.page.height - doc.page.margins.bottom - 120) {
       doc.addPage();
-    } else {
-      doc.moveDown();
+    } else if (index > 0) {
+      doc.moveDown(0.8);
     }
 
-    doc.fontSize(13).fillColor("black").text(item.titre || "Entrée sans intitulé");
     // No item-level GPS line here on purpose: GPS is captured per photo
     // (RapportTerrainPhoto.gpsLat/Lng), never on the item itself — it's
     // drawn under each thumbnail in drawPhotoGrid below instead.
-    doc.fontSize(9).fillColor("gray").text(formatDate(item.capturedAt));
+    doc.font("Helvetica-Bold").fontSize(13).fillColor(PDF_COLORS.ink).text(`${index + 1}. ${item.titre || "Entrée sans intitulé"}`);
+    doc.font("Helvetica").fontSize(9).fillColor(PDF_COLORS.muted).text(formatDate(item.capturedAt));
     if (item.commentaire) {
-      doc.fontSize(10).fillColor("black").text(item.commentaire);
+      doc.fontSize(10).fillColor(PDF_COLORS.ink).text(item.commentaire);
     }
     doc.fillColor("black");
     doc.moveDown(0.5);
 
     drawPhotoGrid(doc, item.photos);
-  }
+  });
 
+  drawFooters(doc, rapport.organization.name);
   doc.end();
   await new Promise<void>((resolve, reject) => {
     stream.on("finish", () => resolve());

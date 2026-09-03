@@ -12,11 +12,52 @@ export function formatDate(date: Date): string {
   return date.toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 }
 
+// Shared palette for every generated PDF — echoes the web app's own
+// "professional dossier" chrome (dashboard/chantier header colors in
+// index.css) so a report doesn't look like a different, older product.
+export const PDF_COLORS = {
+  ink: "#17263d",
+  muted: "#647289",
+  faint: "#8a96a8",
+  accent: "#2167d5",
+  rule: "#dfe6ef",
+  danger: "#a32b25",
+  success: "#247542",
+} as const;
+
 const THUMB = 150;
-const GAP = 12;
+const GAP = 14;
 const PER_ROW = 3;
-const CAPTION_H = 32;
+const CAPTION_H = 30;
 const CELL_H = THUMB + CAPTION_H + GAP;
+
+// Bold colored heading + a thin rule underneath, replacing the old
+// underlined-text style used for every section ("Blocages", "Matériel",
+// "Plan : …", the report title itself) — one consistent, less dated look
+// everywhere instead of each call site styling itself differently.
+export function drawSectionTitle(doc: PDFKit.PDFDocument, title: string, options: { size?: number } = {}): void {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - left - doc.page.margins.right;
+  const size = options.size ?? 13;
+  doc.font("Helvetica-Bold").fontSize(size).fillColor(PDF_COLORS.ink).text(title, left, doc.y, { width });
+  doc.moveDown(0.3);
+  doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1).strokeColor(PDF_COLORS.rule).stroke();
+  doc.moveDown(0.5);
+  doc.font("Helvetica").fillColor("black");
+}
+
+// A compact "LABEL / value" pair, label styled like the web app's own
+// dt/dd metadata blocks (small, bold, muted) — used for report/chantier
+// header fields instead of a flat "Label : value" line so key information
+// actually reads as structured data, not a paragraph.
+export function drawInfoLine(doc: PDFKit.PDFDocument, label: string, value: string): void {
+  const left = doc.page.margins.left;
+  const width = doc.page.width - left - doc.page.margins.right;
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(PDF_COLORS.muted).text(label.toUpperCase(), left, doc.y, { width, characterSpacing: 0.4 });
+  doc.font("Helvetica").fontSize(10.5).fillColor(PDF_COLORS.ink).text(value, left, doc.y + 1, { width });
+  doc.moveDown(0.45);
+  doc.fillColor("black");
+}
 
 // Structural on purpose (not Prisma's Photo type) so callers with a
 // differently-shaped photo record — e.g. RapportTerrainPhoto, which has no
@@ -39,7 +80,7 @@ function formatPhotoGps(lat?: number | null, lng?: number | null, accuracy?: num
 // under each thumbnail, rather than once above the whole grid.
 export function drawPhotoGrid(doc: PDFKit.PDFDocument, photos: PdfGridPhoto[]): void {
   if (photos.length === 0) {
-    doc.fontSize(9).fillColor("gray").text("Aucune photo pour ce point.");
+    doc.fontSize(9).fillColor(PDF_COLORS.faint).text("Aucune photo pour ce point.");
     doc.fillColor("black");
     return;
   }
@@ -58,32 +99,36 @@ export function drawPhotoGrid(doc: PDFKit.PDFDocument, photos: PdfGridPhoto[]): 
     }
 
     const x = left + col * (THUMB + GAP);
+    // A light card frame around every thumbnail — keeps the grid legible
+    // even when a photo is missing/unreadable, and reads as one designed
+    // component instead of a bare image floating on the page.
+    doc.rect(x - 4, rowTop - 4, THUMB + 8, THUMB + 8).fillAndStroke("#fafbfc", PDF_COLORS.rule);
     const absPhotoPath = absolutePathFor(photo.filePath);
     if (fs.existsSync(absPhotoPath)) {
       try {
         doc.image(absPhotoPath, x, rowTop, { fit: [THUMB, THUMB] });
       } catch {
-        doc.rect(x, rowTop, THUMB, THUMB).stroke("#cccccc");
         doc
           .fontSize(8)
-          .fillColor("red")
+          .fillColor(PDF_COLORS.danger)
           .text("Image illisible", x, rowTop + THUMB / 2 - 5, { width: THUMB, align: "center" });
-        doc.fillColor("black");
       }
+    } else {
+      doc.fontSize(8).fillColor(PDF_COLORS.faint).text("Photo indisponible", x, rowTop + THUMB / 2 - 5, { width: THUMB, align: "center" });
     }
     doc
       .fontSize(8)
-      .fillColor("gray")
-      .text(formatDate(photo.takenAt), x, rowTop + THUMB + 4, { width: THUMB, align: "center" });
+      .fillColor(PDF_COLORS.muted)
+      .text(formatDate(photo.takenAt), x, rowTop + THUMB + 6, { width: THUMB, align: "center" });
     doc
       .fontSize(7)
-      .fillColor("gray")
-      .text(formatPhotoGps(photo.gpsLat, photo.gpsLng, photo.gpsAccuracy), x, rowTop + THUMB + 15, { width: THUMB, align: "center" });
+      .fillColor(PDF_COLORS.faint)
+      .text(formatPhotoGps(photo.gpsLat, photo.gpsLng, photo.gpsAccuracy), x, rowTop + THUMB + 17, { width: THUMB, align: "center" });
     doc.fillColor("black");
   });
 
   doc.x = left;
-  doc.y = rowTop + CELL_H + 8;
+  doc.y = rowTop + CELL_H;
 }
 
 const MATERIEL_COLUMNS = [
@@ -94,7 +139,7 @@ const MATERIEL_COLUMNS = [
   { label: "Unité", width: 50 },
   { label: "Écart", width: 60 },
 ];
-const MATERIEL_ROW_H = 16;
+const MATERIEL_ROW_H = 18;
 
 function formatQuantity(value: number | null): string {
   return value == null ? "—" : Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -105,7 +150,7 @@ function drawMaterielTable(
   materiels: Array<{ reference: string | null; designation: string; quantitePrevue: number | null; quantiteUtilisee: number | null; unite: string | null }>
 ): void {
   if (materiels.length === 0) {
-    doc.fontSize(9).fillColor("gray").text("Aucun matériel renseigné pour ce chantier.");
+    doc.fontSize(9).fillColor(PDF_COLORS.faint).text("Aucun matériel renseigné pour ce chantier.");
     doc.fillColor("black");
     return;
   }
@@ -113,13 +158,14 @@ function drawMaterielTable(
   const left = doc.page.margins.left;
   const tableWidth = MATERIEL_COLUMNS.reduce((sum, col) => sum + col.width, 0);
 
-  function drawRow(values: string[], bold = false): void {
+  function drawRow(values: string[], header = false): void {
     if (doc.y + MATERIEL_ROW_H > doc.page.height - doc.page.margins.bottom) doc.addPage();
     const y = doc.y;
+    if (header) doc.rect(left, y - 3, tableWidth, MATERIEL_ROW_H).fill("#f7f9fc");
     let x = left;
-    doc.font(bold ? "Helvetica-Bold" : "Helvetica").fontSize(9).fillColor(bold ? "black" : "#26364d");
+    doc.font(header ? "Helvetica-Bold" : "Helvetica").fontSize(9).fillColor(header ? PDF_COLORS.muted : PDF_COLORS.ink);
     MATERIEL_COLUMNS.forEach((col, i) => {
-      doc.text(values[i] ?? "", x, y, { width: col.width, ellipsis: true });
+      doc.text(values[i] ?? "", x + 4, y, { width: col.width - 4, ellipsis: true });
       x += col.width;
     });
     doc.font("Helvetica");
@@ -127,8 +173,6 @@ function drawMaterielTable(
   }
 
   drawRow(MATERIEL_COLUMNS.map((c) => c.label), true);
-  doc.moveTo(left, doc.y).lineTo(left + tableWidth, doc.y).strokeColor("#cccccc").stroke();
-  doc.y += 2;
 
   for (const materiel of materiels) {
     // No gap shown when there's nothing to compare against — a missing
@@ -143,6 +187,8 @@ function drawMaterielTable(
       ecart == null ? "—" : `${ecart > 0 ? "+" : ""}${formatQuantity(ecart)}`,
     ]);
   }
+  doc.moveTo(left, doc.y).lineTo(left + tableWidth, doc.y).strokeColor(PDF_COLORS.rule).stroke();
+  doc.moveDown(0.6);
   doc.fillColor("black");
 }
 
@@ -161,20 +207,52 @@ function drawPlanBlocageOverview(doc: PDFKit.PDFDocument, plan: { filePath: stri
     if (blocage.distanceMeters != null) doc.fontSize(8).fillColor(color).text(`${blocage.distanceMeters.toFixed(1)} m`, (ax + bx) / 2 - 24, (ay + by) / 2 - 12, { width: 48, align: "center" });
     doc.restore();
   }
-  doc.fillColor("black"); doc.y = y + height + 12;
+  doc.fillColor("black"); doc.y = y + height + 16;
 }
 
 // Shared masthead — logo, name, address, contact — drawn identically at the
 // top of every generated PDF (chantier reports and field reports alike).
 export async function drawOrganizationHeader(doc: PDFKit.PDFDocument, organization: { logoPath: string | null; name: string; address: string | null; postalCode: string | null; city: string | null; country: string | null; phone: string | null; contactEmail: string | null }): Promise<void> {
   if (organization.logoPath) {
-    try { const logo = await sharp(absolutePathFor(organization.logoPath)).resize({ width: 150, height: 70, fit: "inside" }).png().toBuffer(); doc.image(logo, { fit: [150, 70] }); doc.moveDown(0.5); } catch { /* Le rapport reste générable si un ancien logo est illisible. */ }
+    try { const logo = await sharp(absolutePathFor(organization.logoPath)).resize({ width: 150, height: 70, fit: "inside" }).png().toBuffer(); doc.image(logo, { fit: [150, 70] }); doc.moveDown(0.4); } catch { /* Le rapport reste générable si un ancien logo est illisible. */ }
   }
-  doc.fontSize(13).text(organization.name);
+  doc.font("Helvetica-Bold").fontSize(12).fillColor(PDF_COLORS.ink).text(organization.name);
+  doc.font("Helvetica");
   const organizationAddress = [organization.address, [organization.postalCode, organization.city].filter(Boolean).join(" "), organization.country].filter(Boolean).join(" · ");
-  if (organizationAddress) doc.fontSize(9).fillColor("gray").text(organizationAddress);
-  if (organization.phone || organization.contactEmail) doc.fontSize(9).fillColor("gray").text([organization.phone, organization.contactEmail].filter(Boolean).join(" · "));
+  if (organizationAddress) doc.fontSize(9).fillColor(PDF_COLORS.muted).text(organizationAddress);
+  if (organization.phone || organization.contactEmail) doc.fontSize(9).fillColor(PDF_COLORS.muted).text([organization.phone, organization.contactEmail].filter(Boolean).join(" · "));
   doc.fillColor("black");
+  doc.moveDown(0.6);
+  const left = doc.page.margins.left;
+  const width = doc.page.width - left - doc.page.margins.right;
+  doc.moveTo(left, doc.y).lineTo(left + width, doc.y).lineWidth(1.5).strokeColor(PDF_COLORS.accent).stroke();
+  doc.moveDown(0.8);
+}
+
+// Draws "Page X / Y" + the organization name at the bottom of every page —
+// has to run after all content is added (page count isn't known until
+// then), looping back over PDFKit's buffered pages. Call this right before
+// doc.end().
+export function drawFooters(doc: PDFKit.PDFDocument, organizationName: string): void {
+  const range = doc.bufferedPageRange();
+  for (let i = range.start; i < range.start + range.count; i++) {
+    doc.switchToPage(i);
+    const bottomMargin = doc.page.margins.bottom;
+    // The footer sits inside the bottom margin on purpose — but pdfkit's
+    // .text() treats anything past page.height - margins.bottom as
+    // overflow and silently starts a *new* page to fit it, even with an
+    // explicit y. Zeroing the margin for this one write stops that (this
+    // is pdfkit's own documented workaround for footers), restored right after.
+    doc.page.margins.bottom = 0;
+    const left = doc.page.margins.left;
+    const width = doc.page.width - left - doc.page.margins.right;
+    const y = doc.page.height - bottomMargin + 18;
+    doc.font("Helvetica").fontSize(8).fillColor(PDF_COLORS.faint);
+    doc.text(organizationName, left, y, { width: width / 2, align: "left", lineBreak: false });
+    doc.text(`Page ${i - range.start + 1} / ${range.count}`, left, y, { width, align: "right", lineBreak: false });
+    doc.fillColor("black");
+    doc.page.margins.bottom = bottomMargin;
+  }
 }
 
 export async function generateChantierReport(chantierId: string, generatedById: string) {
@@ -202,46 +280,44 @@ export async function generateChantierReport(chantierId: string, generatedById: 
   const fileName = `${crypto.randomUUID()}.pdf`;
   const absPath = path.join(dir, fileName);
 
-  const doc = new PDFDocument({ margin: 50 });
+  const doc = new PDFDocument({ margin: 50, bufferPages: true });
   const stream = fs.createWriteStream(absPath);
   doc.pipe(stream);
 
   await drawOrganizationHeader(doc, chantier.organization);
-  doc.moveDown().fillColor("black").fontSize(20).text(chantier.name, { underline: true });
-  if (chantier.address) doc.fontSize(11).text(chantier.address);
-  if (chantier.description) doc.fontSize(11).text(chantier.description);
-  doc.moveDown();
-  doc.fontSize(10).fillColor("gray").text(`Rapport généré le ${formatDate(new Date())}`);
+  doc.font("Helvetica-Bold").fontSize(21).fillColor(PDF_COLORS.ink).text(chantier.name);
+  doc.font("Helvetica").fillColor(PDF_COLORS.muted).fontSize(9).text(`Rapport généré le ${formatDate(new Date())}`);
+  doc.moveDown(0.5);
+  if (chantier.address) doc.fontSize(10.5).fillColor(PDF_COLORS.ink).text(chantier.address);
+  if (chantier.description) doc.fontSize(10.5).fillColor(PDF_COLORS.ink).text(chantier.description);
   doc.fillColor("black");
+  doc.moveDown();
 
   const allBlocages = chantier.plans.flatMap((plan) => plan.points.flatMap((point) => point.blocages.map((blocage) => ({ ...blocage, pointIdentifiant: point.identifiant }))));
-  doc.moveDown();
-  doc.fontSize(15).text("Blocages / anomalies", { underline: true });
+  drawSectionTitle(doc, "Blocages / anomalies");
   if (allBlocages.length === 0) {
-    doc.fontSize(9).fillColor("gray").text("Aucun blocage signalé sur ce chantier.");
+    doc.fontSize(9).fillColor(PDF_COLORS.faint).text("Aucun blocage signalé sur ce chantier.");
     doc.fillColor("black");
   } else {
     for (const blocage of allBlocages) {
-      doc.fontSize(10).fillColor("black").text(`${blocage.pointIdentifiant} · ${blocage.titre}`);
-      doc.fontSize(8).fillColor("gray").text(`${blocage.statut} · Priorité ${blocage.priorite} · ${formatDate(blocage.createdAt)}`);
-      doc.fontSize(9).fillColor("black").text(blocage.description);
+      doc.font("Helvetica-Bold").fontSize(10).fillColor(PDF_COLORS.ink).text(`${blocage.pointIdentifiant} · ${blocage.titre}`);
+      doc.font("Helvetica").fontSize(8).fillColor(PDF_COLORS.muted).text(`${blocage.statut} · Priorité ${blocage.priorite} · ${formatDate(blocage.createdAt)}`);
+      doc.fontSize(9).fillColor(PDF_COLORS.ink).text(blocage.description);
       doc.moveDown(0.4);
     }
   }
 
-  doc.moveDown();
-  doc.fontSize(15).text("Matériel", { underline: true });
-  doc.moveDown(0.3);
+  doc.moveDown(0.5);
+  drawSectionTitle(doc, "Matériel");
   drawMaterielTable(doc, chantier.materiels);
 
   for (const plan of chantier.plans) {
     doc.addPage();
-    doc.fontSize(16).text(`Plan : ${plan.fileName}`, { underline: true });
-    doc.moveDown();
+    drawSectionTitle(doc, `Plan : ${plan.fileName}`, { size: 15 });
     drawPlanBlocageOverview(doc, plan);
 
     if (plan.points.length === 0) {
-      doc.fontSize(11).fillColor("gray").text("Aucun point sur ce plan.");
+      doc.fontSize(11).fillColor(PDF_COLORS.faint).text("Aucun point sur ce plan.");
       doc.fillColor("black");
       continue;
     }
@@ -254,26 +330,30 @@ export async function generateChantierReport(chantierId: string, generatedById: 
       }
 
       doc
+        .font("Helvetica-Bold")
         .fontSize(13)
+        .fillColor(PDF_COLORS.ink)
         .text(`${point.type ? `[${point.type}] ` : ""}${point.identifiant}${point.nom ? ` — ${point.nom}` : ""}`);
       doc
+        .font("Helvetica")
         .fontSize(9)
-        .fillColor("gray")
+        .fillColor(PDF_COLORS.muted)
         .text(`Statut : ${point.statut}    ·    Ajouté le ${formatDate(point.createdAt)}`);
       if (point.commentaire) {
-        doc.fontSize(10).fillColor("black").text(`Commentaire : ${point.commentaire}`);
+        doc.fontSize(10).fillColor(PDF_COLORS.ink).text(`Commentaire : ${point.commentaire}`);
       }
       if (point.blocages.length > 0) {
         doc.moveDown(0.5);
-        doc.fontSize(11).fillColor("#9b2c2c").text("Blocages / anomalies");
+        doc.font("Helvetica-Bold").fontSize(11).fillColor(PDF_COLORS.danger).text("Blocages / anomalies");
+        doc.font("Helvetica");
         for (const blocage of point.blocages) {
-          doc.fontSize(10).fillColor("black").text(`${blocage.titre} · ${blocage.statut} · Priorité ${blocage.priorite}`);
+          doc.fontSize(10).fillColor(PDF_COLORS.ink).text(`${blocage.titre} · ${blocage.statut} · Priorité ${blocage.priorite}`);
           doc.fontSize(9).text(`${blocage.description} · Signalé le ${formatDate(blocage.createdAt)}`);
           const startPhotos = blocage.photos.filter((photo) => photo.blocageRole === "DEPART");
           const blockagePhotos = blocage.photos.filter((photo) => photo.blocageRole !== "DEPART");
-          if (blocage.distanceMeters != null) doc.fontSize(9).fillColor("#9b2c2c").text(`Distance GPS A → B : ${blocage.distanceMeters.toFixed(1)} m`);
-          if (startPhotos.length > 0) { doc.fontSize(8).fillColor("gray").text("Photos du départ A :"); drawPhotoGrid(doc, startPhotos); }
-          if (blockagePhotos.length > 0) { doc.fontSize(8).fillColor("gray").text("Photos du point bloquant B :"); drawPhotoGrid(doc, blockagePhotos); }
+          if (blocage.distanceMeters != null) doc.fontSize(9).fillColor(PDF_COLORS.danger).text(`Distance GPS A → B : ${blocage.distanceMeters.toFixed(1)} m`);
+          if (startPhotos.length > 0) { doc.fontSize(8).fillColor(PDF_COLORS.muted).text("Photos du départ A :"); drawPhotoGrid(doc, startPhotos); }
+          if (blockagePhotos.length > 0) { doc.fontSize(8).fillColor(PDF_COLORS.muted).text("Photos du point bloquant B :"); drawPhotoGrid(doc, blockagePhotos); }
         }
       }
       doc.fillColor("black");
@@ -283,6 +363,7 @@ export async function generateChantierReport(chantierId: string, generatedById: 
     }
   }
 
+  drawFooters(doc, chantier.organization.name);
   doc.end();
   await new Promise<void>((resolve, reject) => {
     stream.on("finish", () => resolve());
